@@ -13,12 +13,29 @@
 
     <div class="tab-panel" id="panel-upload">
         <form method="post" action="/receipts" enctype="multipart/form-data">
-            <div class="field">
-                <label>Фото чека</label>
-                <input type="file" name="file" accept="image/*" required>
+            <input type="file" id="receipt-file" name="file" accept="image/*" required style="display:none">
+            <div class="field-row">
+                <button type="button" class="btn btn-secondary" onclick="pickReceiptFile(true)">📷 Сделать фото</button>
+                <button type="button" class="btn btn-secondary" onclick="pickReceiptFile(false)">🖼️ Из галереи</button>
             </div>
+            <p class="muted" id="receipt-file-name">Файл не выбран</p>
             <button type="submit" class="btn btn-primary">Распознать и добавить</button>
         </form>
+        <script>
+            function pickReceiptFile(useCamera) {
+                const input = document.getElementById('receipt-file');
+                if (useCamera) {
+                    input.setAttribute('capture', 'environment');
+                } else {
+                    input.removeAttribute('capture');
+                }
+                input.click();
+            }
+            document.getElementById('receipt-file').addEventListener('change', function () {
+                const name = this.files.length ? this.files[0].name : 'Файл не выбран';
+                document.getElementById('receipt-file-name').textContent = name;
+            });
+        </script>
     </div>
 
     <div class="tab-panel" id="panel-manual">

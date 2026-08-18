@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Учёт трат{% endblock %}</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+        nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        nav a { margin-right: 1rem; text-decoration: none; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #8883; }
+        .status-pending { color: #b8860b; }
+        .status-failed { color: #c0392b; }
+        .status-processed { color: #27ae60; }
+        form.inline { display: inline; }
+        .card { border: 1px solid #8883; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .error { color: #c0392b; }
+        button, input[type=submit] { cursor: pointer; }
+    </style>
+</head>
+<body>
+<nav>
+    <div>
+        <a href="/">Чеки</a>
+        <a href="/dashboard">Дашборд</a>
+    </div>
+    {% if request.session.get('user') %}
+    <form class="inline" method="post" action="/logout">
+        <button type="submit">Выйти ({{ request.session.get('user') }})</button>
+    </form>
+    {% endif %}
+</nav>
+{% block content %}{% endblock %}
+</body>
+</html>

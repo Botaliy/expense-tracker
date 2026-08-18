@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Дашборд{% endblock %}
+{% block content %}
+<h1>Дашборд</h1>
+
+<form method="get" action="/dashboard">
+    <label>Месяц: <input type="month" name="month" value="{{ month }}" onchange="this.form.submit()"></label>
+</form>
+
+<p><strong>Итого за месяц:</strong> {{ '%.2f'|format(total) }}</p>
+
+{% if rows %}
+<table>
+    <thead><tr><th>Категория</th><th>Сумма</th><th></th></tr></thead>
+    <tbody>
+    {% for category, amount in rows %}
+        <tr>
+            <td>{{ category }}</td>
+            <td>{{ '%.2f'|format(amount) }}</td>
+            <td>
+                <div style="background:#3498db; height:10px; width:{{ (amount / total * 100) if total else 0 }}%;"></div>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Нет данных за выбранный месяц.</p>
+{% endif %}
+{% endblock %}

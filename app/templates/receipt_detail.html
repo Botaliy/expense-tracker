@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Чек #{{ receipt.id }}{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Назад к списку</a></p>
+<h1>Чек #{{ receipt.id }} <span class="status-{{ receipt.status.value }}">({{ receipt.status.value }})</span></h1>
+
+<div class="card">
+    <img src="/uploads/{{ receipt.image_path }}" alt="Receipt" style="max-width:100%; max-height:400px;">
+</div>
+
+{% if receipt.status.value == 'failed' %}
+<p class="error">Ошибка распознавания: {{ receipt.error_message }}</p>
+<form method="post" action="/receipts/{{ receipt.id }}/retry">
+    <button type="submit">Повторить распознавание</button>
+</form>
+{% endif %}
+
+<div class="card">
+    <p><strong>Магазин:</strong> {{ receipt.store_name or '—' }}</p>
+    <p><strong>Дата покупки:</strong> {{ receipt.purchase_date or '—' }}</p>
+    <p><strong>Итого:</strong> {{ '%.2f'|format(receipt.total_amount) if receipt.total_amount is not none else '—' }} {{ receipt.currency or '' }}</p>
+</div>
+
+{% if receipt.items %}
+<table>
+    <thead><tr><th>Позиция</th><th>Кол-во</th><th>Сумма</th><th>Категория</th></tr></thead>
+    <tbody>
+    {% for item in receipt.items %}
+        <tr>
+            <td>{{ item.description }}</td>
+            <td>{{ item.quantity or '—' }}</td>
+            <td>{{ '%.2f'|format(item.amount) }}</td>
+            <td>
+                <form class="inline" method="post" action="/receipts/{{ receipt.id }}/items/{{ item.id }}">
+                    <select name="category" onchange="this.form.submit()">
+                        {% for c in categories %}
+                        <option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<form method="post" action="/receipts/{{ receipt.id }}/delete" onsubmit="return confirm('Удалить чек?')">
+    <button type="submit">Удалить чек</button>
+</form>
+{% endblock %}

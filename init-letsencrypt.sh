@@ -16,10 +16,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 if [ -f .env ]; then
-    set -a
-    # shellcheck disable=SC1091
-    source .env
-    set +a
+    # Deliberately not `source .env` — some values (e.g. AUTH_PASSWORD_HASH,
+    # a bcrypt hash starting with "$2b$...") would be parsed as shell
+    # expansions like $2, tripping `set -u`. Pull out just what we need.
+    DOMAIN="$(grep -E '^DOMAIN=' .env | tail -n1 | cut -d= -f2-)"
+    CERTBOT_EMAIL="$(grep -E '^CERTBOT_EMAIL=' .env | tail -n1 | cut -d= -f2-)"
 fi
 
 : "${DOMAIN:?Set DOMAIN in .env first}"

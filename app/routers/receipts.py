@@ -21,7 +21,9 @@ def list_receipts(request: Request, db: Session = Depends(get_db)):
         select(Receipt).order_by(Receipt.uploaded_at.desc())
     ).scalars().all()
     return templates.TemplateResponse(
-        request, "receipts_list.html", {"receipts": receipts, "categories": CATEGORIES}
+        request,
+        "receipts_list.html",
+        {"receipts": receipts, "categories": CATEGORIES, "today": date.today().isoformat()},
     )
 
 

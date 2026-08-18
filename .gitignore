@@ -7,3 +7,4 @@ uploads/*
 !uploads/.gitkeep
 .pytest_cache/
 *.egg-info/
+.idea/

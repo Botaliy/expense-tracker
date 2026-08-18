@@ -3,36 +3,294 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Учёт трат{% endblock %}</title>
+    <title>{% block title %}Траты{% endblock %}</title>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <style>
-        :root { color-scheme: light dark; }
-        body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-        nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        nav a { margin-right: 1rem; text-decoration: none; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #8883; }
-        .status-pending { color: #b8860b; }
-        .status-failed { color: #c0392b; }
-        .status-processed { color: #27ae60; }
-        form.inline { display: inline; }
-        .card { border: 1px solid #8883; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-        .error { color: #c0392b; }
-        button, input[type=submit] { cursor: pointer; }
+        :root {
+            --bg: #f4f5f7;
+            --surface: #ffffff;
+            --surface-2: #f9fafb;
+            --border: #e5e7eb;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-soft: #eef2ff;
+            --danger: #ef4444;
+            --danger-soft: #fef2f2;
+            --success: #16a34a;
+            --success-soft: #f0fdf4;
+            --warning: #d97706;
+            --warning-soft: #fffbeb;
+            --radius: 14px;
+            --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f1115;
+                --surface: #171923;
+                --surface-2: #1c1f2a;
+                --border: #2a2e3a;
+                --text: #f3f4f6;
+                --text-muted: #9ca3af;
+                --primary: #818cf8;
+                --primary-hover: #a5b4fc;
+                --primary-soft: #1e1b3a;
+                --danger: #f87171;
+                --danger-soft: #2a1616;
+                --success: #4ade80;
+                --success-soft: #12261a;
+                --warning: #fbbf24;
+                --warning-soft: #2a2113;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
+            }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0 1.25rem 3rem;
+            line-height: 1.5;
+        }
+
+        .page {
+            max-width: 880px;
+            margin: 0 auto;
+        }
+
+        header.topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 0 1rem;
+        }
+
+        .brand {
+            font-weight: 700;
+            font-size: 1.15rem;
+            text-decoration: none;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .brand .dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--primary);
+            display: inline-block;
+        }
+
+        nav.tabs {
+            display: flex;
+            gap: 0.25rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.25rem;
+            box-shadow: var(--shadow);
+        }
+
+        nav.tabs a {
+            text-decoration: none;
+            color: var(--text-muted);
+            padding: 0.4rem 0.9rem;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        nav.tabs a.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 10px;
+            padding: 0.55rem 1rem;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text);
+            border-color: var(--border);
+        }
+        .btn-secondary:hover { background: var(--surface-2); }
+
+        .btn-danger { background: transparent; color: var(--danger); border-color: var(--border); }
+        .btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+
+        .btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
+        .btn-ghost:hover { color: var(--text); }
+
+        .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+        h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+
+        label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
+        }
+
+        input[type=text], input[type=password], input[type=number],
+        input[type=date], input[type=month], input[type=file], select, textarea {
+            width: 100%;
+            font-family: inherit;
+            font-size: 0.95rem;
+            padding: 0.55rem 0.7rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 1px;
+        }
+
+        .field { margin-bottom: 0.85rem; }
+        .field-row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .field-row .field { flex: 1; min-width: 140px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--text-muted);
+            padding: 0.5rem 0.6rem;
+            border-bottom: 1px solid var(--border);
+        }
+        td { padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--border); }
+        tr:last-child td { border-bottom: none; }
+        tbody tr.row-link { cursor: pointer; transition: background 0.1s ease; }
+        tbody tr.row-link:hover { background: var(--surface-2); }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-pending { background: var(--warning-soft); color: var(--warning); }
+        .badge-processed { background: var(--success-soft); color: var(--success); }
+        .badge-failed { background: var(--danger-soft); color: var(--danger); }
+        .badge-category { background: var(--primary-soft); color: var(--primary-hover); }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 2.5rem 1rem;
+        }
+
+        .error {
+            color: var(--danger);
+            background: var(--danger-soft);
+            border-radius: 10px;
+            padding: 0.6rem 0.9rem;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .muted { color: var(--text-muted); font-size: 0.85rem; }
+
+        /* CSS-only tabs (radio-driven) */
+        .tabset input[type=radio] { display: none; }
+        .tabset .tab-labels { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .tabset .tab-labels label {
+            cursor: pointer;
+            margin: 0;
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            background: var(--surface-2);
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .tabset .tab-panel { display: none; }
+        #tab-upload:checked ~ .tab-labels label[for=tab-upload],
+        #tab-manual:checked ~ .tab-labels label[for=tab-manual] {
+            background: var(--primary);
+            color: white;
+        }
+        #tab-upload:checked ~ #panel-upload,
+        #tab-manual:checked ~ #panel-manual {
+            display: block;
+        }
+
+        .login-shell {
+            min-height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card { width: 100%; max-width: 360px; }
+
+        .center-form { max-width: 420px; margin: 0 auto; }
+
+        @media (max-width: 560px) {
+            header.topbar { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+            .field-row { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
-<nav>
-    <div>
-        <a href="/">Чеки</a>
-        <a href="/dashboard">Дашборд</a>
-    </div>
+<div class="page">
     {% if request.session.get('user') %}
-    <form class="inline" method="post" action="/logout">
-        <button type="submit">Выйти ({{ request.session.get('user') }})</button>
-    </form>
+    <header class="topbar">
+        <a class="brand" href="/"><span class="dot"></span>Траты</a>
+        <nav class="tabs">
+            <a href="/" class="{{ 'active' if request.url.path == '/' else '' }}">Чеки</a>
+            <a href="/dashboard" class="{{ 'active' if request.url.path == '/dashboard' else '' }}">Дашборд</a>
+        </nav>
+        <div class="user-menu">
+            <span class="muted">{{ request.session.get('user') }}</span>
+            <form method="post" action="/logout">
+                <button type="submit" class="btn btn-ghost btn-sm">Выйти</button>
+            </form>
+        </div>
+    </header>
     {% endif %}
-</nav>
-{% block content %}{% endblock %}
+    {% block content %}{% endblock %}
+</div>
 </body>
 </html>

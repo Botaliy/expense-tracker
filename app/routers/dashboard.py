@@ -2,16 +2,15 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import LineItem, Receipt
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
-templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

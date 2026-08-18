@@ -3,28 +3,38 @@
 {% block content %}
 <h1>Дашборд</h1>
 
-<form method="get" action="/dashboard">
-    <label>Месяц: <input type="month" name="month" value="{{ month }}" onchange="this.form.submit()"></label>
-</form>
+<div class="card">
+    <form method="get" action="/dashboard" class="field" style="margin:0; max-width:220px;">
+        <label>Месяц</label>
+        <input type="month" name="month" value="{{ month }}" onchange="this.form.submit()">
+    </form>
+</div>
 
-<p><strong>Итого за месяц:</strong> {{ '%.2f'|format(total) }}</p>
+<div class="card">
+    <span class="muted">Итого за месяц</span>
+    <h1 style="margin-top:0.25rem">{{ '%.2f'|format(total) }}</h1>
+</div>
 
+<div class="card" style="padding:0">
 {% if rows %}
 <table>
-    <thead><tr><th>Категория</th><th>Сумма</th><th></th></tr></thead>
+    <thead><tr><th>Категория</th><th>Сумма</th><th style="width:40%">Доля</th></tr></thead>
     <tbody>
     {% for category, amount in rows %}
         <tr>
-            <td>{{ category }}</td>
+            <td><span class="badge badge-category">{{ category }}</span></td>
             <td>{{ '%.2f'|format(amount) }}</td>
             <td>
-                <div style="background:#3498db; height:10px; width:{{ (amount / total * 100) if total else 0 }}%;"></div>
+                <div style="background:var(--surface-2); border-radius:999px; overflow:hidden; height:8px;">
+                    <div style="background:var(--primary); height:100%; width:{{ (amount / total * 100) if total else 0 }}%;"></div>
+                </div>
             </td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
 {% else %}
-<p>Нет данных за выбранный месяц.</p>
+<div class="empty-state">Нет данных за выбранный месяц.</div>
 {% endif %}
+</div>
 {% endblock %}

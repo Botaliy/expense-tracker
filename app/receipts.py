@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.ai_client import ReceiptExtractionError, extract_receipt_data
+from app.categories import normalize_category
 from app.config import get_settings
 from app.models import LineItem, Receipt, ReceiptStatus
 
@@ -29,6 +30,35 @@ def save_upload(filename: str, content: bytes) -> Path:
 def create_receipt(db: Session, image_path: Path) -> Receipt:
     # Stored relative to the upload directory (which is served at /uploads).
     receipt = Receipt(image_path=image_path.name, status=ReceiptStatus.PENDING)
+    db.add(receipt)
+    db.commit()
+    db.refresh(receipt)
+    return receipt
+
+
+def create_manual_expense(
+    db: Session,
+    description: str,
+    amount: float,
+    category: str,
+    purchase_date: date | None,
+    store_name: str | None = None,
+) -> Receipt:
+    """Record an expense entered by hand, with no receipt photo attached."""
+    receipt = Receipt(
+        image_path=None,
+        status=ReceiptStatus.PROCESSED,
+        store_name=store_name or None,
+        purchase_date=purchase_date,
+        total_amount=amount,
+    )
+    receipt.items.append(
+        LineItem(
+            description=description,
+            amount=amount,
+            category=normalize_category(category),
+        )
+    )
     db.add(receipt)
     db.commit()
     db.refresh(receipt)

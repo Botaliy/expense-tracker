@@ -20,7 +20,7 @@ class Receipt(Base):
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC)
     )
-    image_path: Mapped[str] = mapped_column(String(512))
+    image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     store_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     total_amount: Mapped[float | None] = mapped_column(Float, nullable=True)

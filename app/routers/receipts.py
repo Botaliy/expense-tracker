@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from datetime import date, datetime
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,10 +9,10 @@ from app.auth import get_current_user
 from app.categories import CATEGORIES
 from app.database import get_db
 from app.models import LineItem, Receipt
-from app.receipts import create_receipt, process_receipt, save_upload
+from app.receipts import create_manual_expense, create_receipt, process_receipt, save_upload
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
-templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -20,7 +21,7 @@ def list_receipts(request: Request, db: Session = Depends(get_db)):
         select(Receipt).order_by(Receipt.uploaded_at.desc())
     ).scalars().all()
     return templates.TemplateResponse(
-        request, "receipts_list.html", {"receipts": receipts}
+        request, "receipts_list.html", {"receipts": receipts, "categories": CATEGORIES}
     )
 
 
@@ -38,6 +39,33 @@ async def upload_receipt(
     receipt = create_receipt(db, image_path)
     process_receipt(db, receipt)
 
+    return RedirectResponse(url=f"/receipts/{receipt.id}", status_code=303)
+
+
+@router.post("/expenses", response_class=HTMLResponse)
+def add_manual_expense(
+    description: str = Form(...),
+    amount: float = Form(...),
+    category: str = Form(...),
+    purchase_date: str | None = Form(default=None),
+    store_name: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    parsed_date: date | None = None
+    if purchase_date:
+        try:
+            parsed_date = datetime.fromisoformat(purchase_date).date()
+        except ValueError:
+            parsed_date = None
+
+    receipt = create_manual_expense(
+        db,
+        description=description,
+        amount=amount,
+        category=category,
+        purchase_date=parsed_date,
+        store_name=store_name,
+    )
     return RedirectResponse(url=f"/receipts/{receipt.id}", status_code=303)
 
 

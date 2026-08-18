@@ -67,3 +67,43 @@ def test_update_item_category(logged_in_client):
 
     detail = logged_in_client.get(f"/receipts/{receipt_id}")
     assert detail.status_code == 200
+
+
+def test_add_manual_expense(logged_in_client):
+    resp = logged_in_client.post(
+        "/expenses",
+        data={
+            "description": "Такси домой",
+            "amount": "250.5",
+            "category": "Транспорт",
+            "purchase_date": "2026-08-15",
+            "store_name": "",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    detail_url = resp.headers["location"]
+
+    detail = logged_in_client.get(detail_url)
+    assert detail.status_code == 200
+    assert "Такси домой" in detail.text
+    assert "250.50" in detail.text
+    assert "processed" in detail.text
+    # No receipt photo was attached, so no <img> should be rendered.
+    assert "<img" not in detail.text
+
+
+def test_add_manual_expense_rejects_unknown_category(logged_in_client):
+    resp = logged_in_client.post(
+        "/expenses",
+        data={
+            "description": "Что-то",
+            "amount": "10",
+            "category": "Не существует",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    detail = logged_in_client.get(resp.headers["location"])
+    # Falls back to the default category instead of failing.
+    assert "Прочее" in detail.text

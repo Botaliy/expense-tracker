@@ -30,6 +30,21 @@
 {% endif %}
 
 {% if receipt.items %}
+{% if receipt.items|length > 1 %}
+<div class="card">
+    <form method="post" action="/receipts/{{ receipt.id }}/category" class="field-row" style="align-items:flex-end; margin-bottom:0;">
+        <div class="field" style="flex:1; margin-bottom:0;">
+            <label>Категория для всех позиций</label>
+            <select name="category">
+                {% for c in categories %}
+                <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-secondary">Применить ко всем</button>
+    </form>
+</div>
+{% endif %}
 <div class="card" style="padding:0">
 <table>
     <thead><tr><th>Позиция</th><th>Кол-во</th><th>Сумма</th><th>Категория</th></tr></thead>

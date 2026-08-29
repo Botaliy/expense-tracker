@@ -257,6 +257,37 @@
             display: block;
         }
 
+        .cat-list { display: flex; flex-direction: column; }
+        .cat-item { border-bottom: 1px solid var(--border); padding: 0.9rem 1.25rem; }
+        .cat-item:last-child { border-bottom: none; }
+        .cat-item summary {
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .cat-item summary::-webkit-details-marker { display: none; }
+        .cat-item summary::before {
+            content: '\203A';
+            color: var(--text-muted);
+            font-weight: 700;
+            transition: transform 0.15s ease;
+        }
+        .cat-item[open] summary::before { transform: rotate(90deg); }
+        .cat-item .cat-bar {
+            flex: 1;
+            background: var(--surface-2);
+            border-radius: 999px;
+            overflow: hidden;
+            height: 8px;
+        }
+        .cat-item .cat-bar > div { background: var(--primary); height: 100%; }
+        .cat-item .cat-amount { font-weight: 600; min-width: 5.5rem; text-align: right; }
+        .cat-items-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
+        .cat-items-table td { padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+        .cat-items-table tr:last-child td { border-bottom: none; }
+
         .login-shell {
             min-height: 70vh;
             display: flex;
@@ -292,5 +323,20 @@
     {% endif %}
     {% block content %}{% endblock %}
 </div>
+<script>
+    // Prevent double-submit (e.g. clicking a submit button twice while the
+    // request is in flight), which would otherwise create duplicate records.
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (form.dataset.submitted === '1') {
+            e.preventDefault();
+            return;
+        }
+        form.dataset.submitted = '1';
+        form.querySelectorAll('button[type=submit], button:not([type])').forEach(function (btn) {
+            btn.disabled = true;
+        });
+    });
+</script>
 </body>
 </html>

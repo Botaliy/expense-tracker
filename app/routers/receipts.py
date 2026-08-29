@@ -96,7 +96,7 @@ def retry_receipt(receipt_id: int, db: Session = Depends(get_db)):
 def update_item_category(
     receipt_id: int,
     item_id: int,
-    category: str,
+    category: str = Form(...),
     db: Session = Depends(get_db),
 ):
     item = db.get(LineItem, item_id)
@@ -105,6 +105,23 @@ def update_item_category(
     if category not in CATEGORIES:
         raise HTTPException(status_code=400, detail="Unknown category")
     item.category = category
+    db.commit()
+    return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
+
+
+@router.post("/receipts/{receipt_id}/category", response_class=HTMLResponse)
+def update_all_items_category(
+    receipt_id: int,
+    category: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    receipt = db.get(Receipt, receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    if category not in CATEGORIES:
+        raise HTTPException(status_code=400, detail="Unknown category")
+    for item in receipt.items:
+        item.category = category
     db.commit()
     return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
 

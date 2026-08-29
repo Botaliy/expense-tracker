@@ -68,6 +68,49 @@ def test_update_item_category(logged_in_client):
     detail = logged_in_client.get(f"/receipts/{receipt_id}")
     assert detail.status_code == 200
 
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    with SessionLocal() as db:
+        receipt = db.get(Receipt, int(receipt_id))
+        item_id = receipt.items[0].id
+
+    update_resp = logged_in_client.post(
+        f"/receipts/{receipt_id}/items/{item_id}",
+        data={"category": "Здоровье"},
+        follow_redirects=False,
+    )
+    assert update_resp.status_code == 303
+
+    with SessionLocal() as db:
+        receipt = db.get(Receipt, int(receipt_id))
+        assert receipt.items[0].category == "Здоровье"
+
+
+def test_update_all_items_category(logged_in_client):
+    fake_image = io.BytesIO(b"fake-image-bytes")
+    with patch("app.receipts.extract_receipt_data", return_value=_fake_extraction()):
+        resp = logged_in_client.post(
+            "/receipts",
+            files={"file": ("receipt.jpg", fake_image, "image/jpeg")},
+            follow_redirects=False,
+        )
+    receipt_id = resp.headers["location"].rsplit("/", 1)[-1]
+
+    update_resp = logged_in_client.post(
+        f"/receipts/{receipt_id}/category",
+        data={"category": "Развлечения"},
+        follow_redirects=False,
+    )
+    assert update_resp.status_code == 303
+
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    with SessionLocal() as db:
+        receipt = db.get(Receipt, int(receipt_id))
+        assert all(item.category == "Развлечения" for item in receipt.items)
+
 
 def test_add_manual_expense(logged_in_client):
     resp = logged_in_client.post(

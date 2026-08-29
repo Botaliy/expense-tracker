@@ -17,22 +17,29 @@
 
 <div class="card" style="padding:0">
 {% if rows %}
-<table>
-    <thead><tr><th>Категория</th><th>Сумма</th><th style="width:40%">Доля</th></tr></thead>
-    <tbody>
+<div class="cat-list">
     {% for category, amount in rows %}
-        <tr>
-            <td><span class="badge badge-category">{{ category }}</span></td>
-            <td>{{ '%.2f'|format(amount) }}</td>
-            <td>
-                <div style="background:var(--surface-2); border-radius:999px; overflow:hidden; height:8px;">
-                    <div style="background:var(--primary); height:100%; width:{{ (amount / total * 100) if total else 0 }}%;"></div>
-                </div>
-            </td>
-        </tr>
+    <details class="cat-item">
+        <summary>
+            <span class="badge badge-category">{{ category }}</span>
+            <div class="cat-bar"><div style="width:{{ (amount / total * 100) if total else 0 }}%;"></div></div>
+            <span class="cat-amount">{{ '%.2f'|format(amount) }}</span>
+        </summary>
+        <table class="cat-items-table">
+            <tbody>
+            {% for item in items_by_category.get(category, []) %}
+                <tr class="row-link" onclick="window.location='/receipts/{{ item.receipt_id }}'">
+                    <td class="muted">{{ item.purchase_date or '—' }}</td>
+                    <td>{{ item.store_name or '—' }}</td>
+                    <td>{{ item.description }}{% if item.quantity %} &times; {{ item.quantity }}{% endif %}</td>
+                    <td>{{ '%.2f'|format(item.amount) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </details>
     {% endfor %}
-    </tbody>
-</table>
+</div>
 {% else %}
 <div class="empty-state">Нет данных за выбранный месяц.</div>
 {% endif %}

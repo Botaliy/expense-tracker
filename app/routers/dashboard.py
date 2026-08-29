@@ -39,6 +39,34 @@ def dashboard(
 
     total = sum(amount for _, amount in rows)
 
+    detail_rows = db.execute(
+        select(
+            LineItem.category,
+            LineItem.description,
+            LineItem.amount,
+            LineItem.quantity,
+            Receipt.id,
+            Receipt.store_name,
+            Receipt.purchase_date,
+        )
+        .join(Receipt, LineItem.receipt_id == Receipt.id)
+        .where(Receipt.purchase_date >= start, Receipt.purchase_date < end)
+        .order_by(Receipt.purchase_date.desc())
+    ).all()
+
+    items_by_category: dict[str, list[dict]] = {}
+    for category, description, amount, quantity, receipt_id, store_name, purchase_date in detail_rows:
+        items_by_category.setdefault(category, []).append(
+            {
+                "description": description,
+                "amount": amount,
+                "quantity": quantity,
+                "receipt_id": receipt_id,
+                "store_name": store_name,
+                "purchase_date": purchase_date,
+            }
+        )
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -46,5 +74,6 @@ def dashboard(
             "month": month_str,
             "rows": rows,
             "total": total,
+            "items_by_category": items_by_category,
         },
     )

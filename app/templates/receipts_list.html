@@ -117,13 +117,21 @@
 {% if receipts %}
 <table>
     <thead>
-        <tr><th>Дата</th><th>Магазин</th><th>Сумма</th><th>Статус</th></tr>
+        <tr><th>Дата</th><th>Магазин</th><th>Категория</th><th>Сумма</th><th>Статус</th></tr>
     </thead>
     <tbody>
     {% for r in receipts %}
         <tr class="row-link" onclick="window.location='/receipts/{{ r.id }}'">
             <td>{{ r.purchase_date or r.uploaded_at.strftime('%Y-%m-%d') }}</td>
             <td>{{ r.store_name or '—' }}</td>
+            <td>
+                {% set cats = categories_by_receipt.get(r.id, []) %}
+                {% if cats %}
+                <span style="display:flex; flex-wrap:wrap; gap:0.25rem;">
+                    {% for c in cats %}<span class="badge badge-category">{{ c }}</span>{% endfor %}
+                </span>
+                {% else %}—{% endif %}
+            </td>
             <td>{{ '%.2f'|format(r.total_amount) if r.total_amount is not none else '—' }} {{ r.currency or '' }}</td>
             <td><span class="badge badge-{{ r.status.value }}">{{ r.status.value }}</span></td>
         </tr>

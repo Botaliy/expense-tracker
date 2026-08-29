@@ -21,10 +21,27 @@ def list_receipts(request: Request, db: Session = Depends(get_db)):
     receipts = db.execute(
         select(Receipt).order_by(Receipt.uploaded_at.desc())
     ).scalars().all()
+
+    categories_by_receipt: dict[int, list[str]] = {}
+    if receipts:
+        cat_rows = db.execute(
+            select(LineItem.receipt_id, LineItem.category)
+            .where(LineItem.receipt_id.in_([r.id for r in receipts]))
+            .distinct()
+            .order_by(LineItem.category)
+        ).all()
+        for receipt_id, category in cat_rows:
+            categories_by_receipt.setdefault(receipt_id, []).append(category)
+
     return templates.TemplateResponse(
         request,
         "receipts_list.html",
-        {"receipts": receipts, "categories": CATEGORIES, "today": date.today().isoformat()},
+        {
+            "receipts": receipts,
+            "categories": CATEGORIES,
+            "categories_by_receipt": categories_by_receipt,
+            "today": date.today().isoformat(),
+        },
     )
 
 
@@ -104,6 +121,32 @@ def receipt_detail(request: Request, receipt_id: int, db: Session = Depends(get_
     )
 
 
+@router.post("/receipts/{receipt_id}", response_class=HTMLResponse)
+def update_receipt(
+    receipt_id: int,
+    store_name: str | None = Form(default=None),
+    purchase_date: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    receipt = db.get(Receipt, receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    receipt.store_name = (store_name or "").strip() or None
+    if purchase_date is not None:
+        stripped = purchase_date.strip()
+        if not stripped:
+            receipt.purchase_date = None
+        else:
+            try:
+                receipt.purchase_date = datetime.fromisoformat(stripped).date()
+            except ValueError:
+                pass  # keep the existing date on unparseable input
+
+    db.commit()
+    return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
+
+
 @router.post("/receipts/{receipt_id}/retry", response_class=HTMLResponse)
 def retry_receipt(receipt_id: int, db: Session = Depends(get_db)):
     receipt = db.get(Receipt, receipt_id)
@@ -114,10 +157,13 @@ def retry_receipt(receipt_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/receipts/{receipt_id}/items/{item_id}", response_class=HTMLResponse)
-def update_item_category(
+def update_item(
     receipt_id: int,
     item_id: int,
     category: str = Form(...),
+    description: str | None = Form(default=None),
+    amount: float | None = Form(default=None),
+    quantity: float | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     item = db.get(LineItem, item_id)
@@ -125,7 +171,18 @@ def update_item_category(
         raise HTTPException(status_code=404, detail="Item not found")
     if category not in CATEGORIES:
         raise HTTPException(status_code=400, detail="Unknown category")
+
     item.category = category
+    if description is not None and description.strip():
+        item.description = description.strip()
+    if amount is not None and amount >= 0:
+        item.amount = amount
+    if quantity is not None:
+        item.quantity = quantity if quantity > 0 else None
+
+    # Keep the receipt total in sync with its line items.
+    item.receipt.total_amount = sum(i.amount for i in item.receipt.items)
+
     db.commit()
     return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
 

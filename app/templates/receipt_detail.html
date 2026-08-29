@@ -14,6 +14,22 @@
     </p>
 </div>
 
+<div class="card">
+    <form method="post" action="/receipts/{{ receipt.id }}">
+        <div class="field-row">
+            <div class="field" style="flex:2;">
+                <label>Магазин / место</label>
+                <input type="text" name="store_name" value="{{ receipt.store_name or '' }}" placeholder="Например, Пятёрочка">
+            </div>
+            <div class="field">
+                <label>Дата</label>
+                <input type="date" name="purchase_date" value="{{ receipt.purchase_date.isoformat() if receipt.purchase_date else '' }}">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-secondary">Сохранить</button>
+    </form>
+</div>
+
 {% if receipt.image_path %}
 <div class="card">
     <img src="/uploads/{{ receipt.image_path }}" alt="Receipt" style="max-width:100%; max-height:420px; border-radius:10px; display:block; margin:0 auto;">
@@ -47,21 +63,29 @@
 {% endif %}
 <div class="card" style="padding:0">
 <table>
-    <thead><tr><th>Позиция</th><th>Кол-во</th><th>Сумма</th><th>Категория</th></tr></thead>
+    <thead><tr><th>Позиция</th><th>Кол-во</th><th>Сумма</th><th>Категория</th><th></th></tr></thead>
     <tbody>
     {% for item in receipt.items %}
         <tr>
-            <td>{{ item.description }}</td>
-            <td>{{ item.quantity or '—' }}</td>
-            <td>{{ '%.2f'|format(item.amount) }}</td>
             <td>
-                <form method="post" action="/receipts/{{ receipt.id }}/items/{{ item.id }}">
-                    <select name="category" onchange="this.form.submit()">
-                        {% for c in categories %}
-                        <option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
+                <form id="item-{{ item.id }}" method="post" action="/receipts/{{ receipt.id }}/items/{{ item.id }}"></form>
+                <input type="text" name="description" value="{{ item.description }}" form="item-{{ item.id }}" required>
+            </td>
+            <td style="max-width:5rem;">
+                <input type="number" name="quantity" step="0.01" min="0" value="{{ item.quantity or '' }}" form="item-{{ item.id }}">
+            </td>
+            <td style="max-width:7rem;">
+                <input type="number" name="amount" step="0.01" min="0" value="{{ '%.2f'|format(item.amount) }}" form="item-{{ item.id }}" required>
+            </td>
+            <td>
+                <select name="category" form="item-{{ item.id }}">
+                    {% for c in categories %}
+                    <option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                <button type="submit" class="btn btn-secondary btn-sm" form="item-{{ item.id }}">Сохранить</button>
             </td>
         </tr>
     {% endfor %}

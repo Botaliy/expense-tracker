@@ -136,6 +136,65 @@ def test_add_manual_expense(logged_in_client):
     assert "<img" not in detail.text
 
 
+def test_add_manual_expense_auto_categorizes_when_blank(logged_in_client):
+    with patch(
+        "app.routers.receipts.categorize_expense", return_value="Транспорт"
+    ) as mock_cat:
+        resp = logged_in_client.post(
+            "/expenses",
+            data={"description": "Такси до аэропорта", "amount": "700", "category": ""},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 303
+    mock_cat.assert_called_once()
+    detail = logged_in_client.get(resp.headers["location"])
+    assert "Транспорт" in detail.text
+
+
+def test_add_manual_expense_falls_back_when_ai_unavailable(logged_in_client):
+    from app.ai_client import ExpenseCategorizationError
+
+    with patch(
+        "app.routers.receipts.categorize_expense",
+        side_effect=ExpenseCategorizationError("no key"),
+    ):
+        resp = logged_in_client.post(
+            "/expenses",
+            data={"description": "Что-то непонятное", "amount": "10"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 303
+    detail = logged_in_client.get(resp.headers["location"])
+    assert "Прочее" in detail.text
+
+
+def test_categorize_endpoint_returns_suggestion(logged_in_client):
+    with patch(
+        "app.routers.receipts.categorize_expense", return_value="Развлечения"
+    ):
+        resp = logged_in_client.post(
+            "/expenses/categorize",
+            data={"description": "Билеты в кино", "amount": "600"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"category": "Развлечения"}
+
+
+def test_categorize_endpoint_reports_ai_error(logged_in_client):
+    from app.ai_client import ExpenseCategorizationError
+
+    with patch(
+        "app.routers.receipts.categorize_expense",
+        side_effect=ExpenseCategorizationError("boom"),
+    ):
+        resp = logged_in_client.post(
+            "/expenses/categorize",
+            data={"description": "Билеты в кино"},
+        )
+    assert resp.status_code == 502
+    assert "boom" in resp.json()["error"]
+
+
 def test_add_manual_expense_rejects_unknown_category(logged_in_client):
     resp = logged_in_client.post(
         "/expenses",

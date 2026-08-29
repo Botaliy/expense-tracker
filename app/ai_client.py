@@ -4,7 +4,12 @@ from pathlib import Path
 
 from anthropic import Anthropic
 
-from app.categories import CATEGORIES
+from app.categories import (
+    CATEGORIES,
+    CATEGORY_GUIDANCE,
+    DEFAULT_CATEGORY,
+    normalize_category,
+)
 from app.config import get_settings
 from app.schemas import ExtractedReceipt
 
@@ -52,23 +57,45 @@ PROMPT = (
     "You are extracting structured data from a photo of a purchase receipt. "
     "Read every line item, its price, and assign each item the closest matching "
     f"category from this fixed list: {', '.join(CATEGORIES)}. "
-    "Category disambiguation notes: "
-    "'Алкоголь' is any alcoholic drink (beer, wine, spirits, etc.), even if bought in a "
-    "grocery store — it never goes into 'Продукты'. "
-    "'Техника' covers electronics and gaming: computer/console hardware and accessories, "
-    "software, and video games. "
-    "'Красота' covers cosmetics and personal grooming services: makeup/skincare products, "
-    "manicure, pedicure, hairdresser/barber — as opposed to 'Здоровье', which is for "
-    "medicine, medical services, and health-related purchases. "
-    "'Авто' is for car-related expenses: fuel, parking, maintenance, car parts — as opposed "
-    "to 'Транспорт', which is for public/shared transport (taxi, bus, metro, etc.). "
+    f"{CATEGORY_GUIDANCE} "
     "If you can't confidently split into line items, return a single item summarizing "
     "the whole receipt. Use the record_receipt tool to report the result. "
     "Amounts should be plain numbers without currency symbols."
 )
 
 
+CATEGORIZE_TOOL_NAME = "pick_category"
+
+CATEGORIZE_TOOL = {
+    "name": CATEGORIZE_TOOL_NAME,
+    "description": "Report the single best-matching category for one expense.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "category": {
+                "type": "string",
+                "enum": CATEGORIES,
+                "description": "Best matching category from the fixed list.",
+            }
+        },
+        "required": ["category"],
+    },
+}
+
+CATEGORIZE_PROMPT = (
+    "You classify a single personal expense into exactly one category from this "
+    f"fixed list: {', '.join(CATEGORIES)}. "
+    f"{CATEGORY_GUIDANCE} "
+    f"If nothing fits confidently, use '{DEFAULT_CATEGORY}'. "
+    "Use the pick_category tool to report the result."
+)
+
+
 class ReceiptExtractionError(RuntimeError):
+    pass
+
+
+class ExpenseCategorizationError(RuntimeError):
     pass
 
 
@@ -118,3 +145,47 @@ def extract_receipt_data(image_path: Path) -> ExtractedReceipt:
         return ExtractedReceipt.model_validate(tool_use_block.input)
     except Exception as exc:
         raise ReceiptExtractionError(f"Could not parse model output: {exc}") from exc
+
+
+def categorize_expense(description: str, amount: float | None = None) -> str:
+    """Ask the model to pick one category for a single hand-entered expense.
+
+    Returns a category guaranteed to be in ``CATEGORIES``. Raises
+    ``ExpenseCategorizationError`` if the API is unavailable or misbehaves.
+    """
+    if not description or not description.strip():
+        raise ExpenseCategorizationError("Description is empty")
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise ExpenseCategorizationError("ANTHROPIC_API_KEY is not configured")
+
+    client = Anthropic(api_key=settings.anthropic_api_key)
+
+    expense_line = f"Expense: {description.strip()}"
+    if amount is not None:
+        expense_line += f"\nAmount: {amount:g}"
+
+    try:
+        response = client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=256,
+            tools=[CATEGORIZE_TOOL],
+            tool_choice={"type": "tool", "name": CATEGORIZE_TOOL_NAME},
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{CATEGORIZE_PROMPT}\n\n{expense_line}",
+                }
+            ],
+        )
+    except Exception as exc:  # network/auth/rate-limit errors from the SDK
+        raise ExpenseCategorizationError(f"Anthropic API call failed: {exc}") from exc
+
+    tool_use_block = next(
+        (block for block in response.content if block.type == "tool_use"), None
+    )
+    if tool_use_block is None:
+        raise ExpenseCategorizationError("Model did not return a category")
+
+    return normalize_category(tool_use_block.input.get("category"))

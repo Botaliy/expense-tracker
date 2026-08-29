@@ -1,12 +1,13 @@
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai_client import ExpenseCategorizationError, categorize_expense
 from app.auth import get_current_user
-from app.categories import CATEGORIES
+from app.categories import CATEGORIES, DEFAULT_CATEGORY
 from app.database import get_db
 from app.models import LineItem, Receipt
 from app.receipts import create_manual_expense, create_receipt, process_receipt, save_upload
@@ -44,11 +45,24 @@ async def upload_receipt(
     return RedirectResponse(url=f"/receipts/{receipt.id}", status_code=303)
 
 
+@router.post("/expenses/categorize", response_class=JSONResponse)
+def categorize_manual_expense(
+    description: str = Form(...),
+    amount: float | None = Form(default=None),
+):
+    """Suggest a category for a hand-entered expense (used by the form's button)."""
+    try:
+        category = categorize_expense(description, amount)
+    except ExpenseCategorizationError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    return {"category": category}
+
+
 @router.post("/expenses", response_class=HTMLResponse)
 def add_manual_expense(
     description: str = Form(...),
     amount: float = Form(...),
-    category: str = Form(...),
+    category: str | None = Form(default=None),
     purchase_date: str | None = Form(default=None),
     store_name: str | None = Form(default=None),
     db: Session = Depends(get_db),
@@ -59,6 +73,13 @@ def add_manual_expense(
             parsed_date = datetime.fromisoformat(purchase_date).date()
         except ValueError:
             parsed_date = None
+
+    # No category picked → let the model classify it from the description/amount.
+    if not category or not category.strip():
+        try:
+            category = categorize_expense(description, amount)
+        except ExpenseCategorizationError:
+            category = DEFAULT_CATEGORY
 
     receipt = create_manual_expense(
         db,

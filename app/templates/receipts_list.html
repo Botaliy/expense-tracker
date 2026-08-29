@@ -39,21 +39,22 @@
     </div>
 
     <div class="tab-panel" id="panel-manual">
-        <form method="post" action="/expenses">
+        <form method="post" action="/expenses" id="manual-form">
             <div class="field-row">
                 <div class="field">
                     <label>Описание</label>
-                    <input type="text" name="description" placeholder="Например, такси" required>
+                    <input type="text" name="description" id="manual-description" placeholder="Например, такси" required>
                 </div>
                 <div class="field">
                     <label>Сумма</label>
-                    <input type="number" name="amount" step="0.01" min="0" required>
+                    <input type="number" name="amount" id="manual-amount" step="0.01" min="0" required>
                 </div>
             </div>
             <div class="field-row">
                 <div class="field">
                     <label>Категория</label>
-                    <select name="category" required>
+                    <select name="category" id="manual-category">
+                        <option value="">✨ Определит сетка</option>
                         {% for c in categories %}
                         <option value="{{ c }}">{{ c }}</option>
                         {% endfor %}
@@ -64,12 +65,51 @@
                     <input type="date" name="purchase_date" value="{{ today }}">
                 </div>
             </div>
+            <div class="field-row">
+                <button type="button" class="btn btn-secondary" id="manual-detect">✨ Определить категорию</button>
+                <span class="muted" id="manual-detect-status"></span>
+            </div>
             <div class="field">
                 <label>Магазин/место (необязательно)</label>
                 <input type="text" name="store_name">
             </div>
             <button type="submit" class="btn btn-primary">Добавить трату</button>
         </form>
+        <script>
+            (function () {
+                const btn = document.getElementById('manual-detect');
+                const status = document.getElementById('manual-detect-status');
+                const description = document.getElementById('manual-description');
+                const amount = document.getElementById('manual-amount');
+                const category = document.getElementById('manual-category');
+
+                btn.addEventListener('click', async function () {
+                    if (!description.value.trim()) {
+                        status.textContent = 'Сначала введите описание';
+                        return;
+                    }
+                    btn.disabled = true;
+                    status.textContent = 'Определяю…';
+                    try {
+                        const body = new FormData();
+                        body.append('description', description.value);
+                        if (amount.value) body.append('amount', amount.value);
+                        const resp = await fetch('/expenses/categorize', { method: 'POST', body });
+                        const data = await resp.json();
+                        if (resp.ok && data.category) {
+                            category.value = data.category;
+                            status.textContent = 'Категория: ' + data.category;
+                        } else {
+                            status.textContent = data.error || 'Не удалось определить';
+                        }
+                    } catch (err) {
+                        status.textContent = 'Ошибка сети';
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
+            })();
+        </script>
     </div>
 </div>
 

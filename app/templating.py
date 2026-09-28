@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -101,6 +102,26 @@ def human_date_time(value: datetime) -> str:
     return f"{human_date(local.date())} {local:%H:%M}"
 
 
+def simple_markdown(text: str) -> Markup:
+    """The little formatting Claude's answers use: paragraphs, ``- `` bullets, ``**bold**``."""
+    def inline(line: str) -> str:
+        escaped = str(Markup.escape(line))
+        return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+
+    html, bullets = [], []
+    for raw in text.splitlines() + [""]:
+        line = raw.strip()
+        if line.startswith(("- ", "• ", "* ")):
+            bullets.append(f"<li>{inline(line[2:])}</li>")
+            continue
+        if bullets:
+            html.append("<ul>" + "".join(bullets) + "</ul>")
+            bullets = []
+        if line:
+            html.append(f"<p>{inline(line)}</p>")
+    return Markup("".join(html))
+
+
 def plural(n: int, one: str, few: str, many: str) -> str:
     if n % 10 == 1 and n % 100 != 11:
         word = one
@@ -157,5 +178,6 @@ templates.env.filters.update(
     cat_emoji=cat_emoji,
     cat_icon=cat_icon,
     cat_color=cat_color,
+    simple_markdown=simple_markdown,
 )
 templates.env.globals.update(plural=plural, currency_symbol=CURRENCY_SYMBOL)

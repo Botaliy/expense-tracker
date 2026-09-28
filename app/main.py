@@ -10,6 +10,7 @@ from app import database
 from app.database import init_db
 from app.receipts import fail_interrupted_receipts
 from app.routers import (
+    ask,
     auth,
     bank,
     budgets,
@@ -60,3 +61,4 @@ app.include_router(budgets.router)
 app.include_router(prices.router)
 app.include_router(recurring.router)
 app.include_router(shopping.router)
+app.include_router(ask.router)

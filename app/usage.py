@@ -23,16 +23,18 @@ RECEIPT = "receipt"
 CLASSIFY = "classify"
 LABEL = "label"
 STATEMENT = "statement"
+ASK = "ask"
 
 PURPOSE_LABELS = {
     RECEIPT: "Распознавание чеков",
     CLASSIFY: "Подсказка при ручном вводе",
     LABEL: "Разметка товаров",
     STATEMENT: "Импорт выписок",
+    ASK: "Вопросы о тратах",
 }
 # For the narrow "latest calls" table.
 PURPOSE_SHORT = {
-    RECEIPT: "Чек", CLASSIFY: "Ручной ввод", LABEL: "Разметка", STATEMENT: "Выписка",
+    RECEIPT: "Чек", CLASSIFY: "Ручной ввод", LABEL: "Разметка", STATEMENT: "Выписка", ASK: "Вопрос",
 }
 
 

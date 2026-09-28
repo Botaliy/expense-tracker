@@ -11,7 +11,6 @@ from app.search import (
     find_matches,
     known_names,
     search_period,
-    suggest,
     summarize,
 )
 from app.stats import nice_ticks
@@ -30,11 +29,11 @@ def search(
 ):
     query = q.strip()
     start, end, months = search_period(date.today())
-    context = {"query": query, "months_count": SEARCH_MONTHS}
+    names = known_names(db, start, end)
+    context = {"query": query, "months_count": SEARCH_MONTHS, "names": names}
 
     if not query:
-        items = [n for n in known_names(db, start, end) if n["kind"] == "product"]
-        context["often"] = items[:OFTEN_BOUGHT]
+        context["often"] = [n for n in names if n["kind"] == "product"][:OFTEN_BOUGHT]
         return templates.TemplateResponse(request, "search.html", context)
 
     result = summarize(find_matches(db, query, start, end), months)
@@ -42,17 +41,3 @@ def search(
     context.update(result=result, ticks=ticks, axis_max=ticks[-1] or 1)
     return templates.TemplateResponse(request, "search.html", context)
 
-
-@router.get("/search/suggest", response_class=HTMLResponse)
-def search_suggestions(
-    request: Request,
-    q: str = Query(default=""),
-    db: Session = Depends(get_db),
-):
-    """Names from the user's own receipts, for the dropdown under the search box."""
-    start, end, _ = search_period(date.today())
-    return templates.TemplateResponse(
-        request,
-        "_search_suggestions.html",
-        {"suggestions": suggest(known_names(db, start, end), q)},
-    )

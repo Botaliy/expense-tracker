@@ -20,6 +20,7 @@
         position: absolute; left: 0; right: 64px; top: calc(100% + 6px); z-index: 4;
         background: var(--surface); border-radius: 16px; box-shadow: var(--shadow), 0 0 0 1px var(--line);
         padding: 6px; display: flex; flex-direction: column;
+        max-height: min(60vh, 440px); overflow-y: auto; overscroll-behavior: contain;
     }
     .suggestions:empty { display: none; }
     .suggestion {
@@ -28,6 +29,7 @@
     }
     .suggestion:hover, .suggestion:focus-visible { background: var(--surface-2); outline: none; }
     .suggestion .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .suggestion mark { background: none; color: var(--accent); font-weight: 700; }
     .suggestion .stat { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
     .examples { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -76,13 +78,13 @@
     <form class="search-box" method="get" action="/search" role="search">
         <input type="search" name="q" value="{{ query }}" placeholder="coffee, beer, Lidl…"
                aria-label="Что искать" autocomplete="off" {% if not query %}autofocus{% endif %}
-               role="combobox" aria-controls="suggestions" aria-autocomplete="list"
-               hx-get="/search/suggest" hx-trigger="input changed delay:150ms, focus" hx-target="#suggestions">
+               role="combobox" aria-controls="suggestions" aria-autocomplete="list" aria-expanded="false">
         <button type="submit" class="btn btn-primary" aria-label="Найти">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         </button>
     </form>
     <div class="suggestions" id="suggestions" role="listbox" aria-label="Из твоих чеков"></div>
+    <template id="all-names">{% include "_search_suggestions.html" %}</template>
     </div>
 
     {% if not query %}
@@ -179,13 +181,64 @@
 (function () {
     var input = document.querySelector('.search-box input[name=q]');
     var box = document.getElementById('suggestions');
-    function close() { box.innerHTML = ''; }
+    // Most bought first, as rendered by the server.
+    var all = Array.prototype.slice.call(document.getElementById('all-names').content.children);
+
+    // Same folding as app/search.py _fold: case and spacing don't matter.
+    function fold(text) {
+        return text.toLowerCase().replace(/ß/g, 'ss').replace(/\s+/g, ' ').trim();
+    }
+
+    function highlight(el, needle) {
+        var name = el.querySelector('.name');
+        var text = name.textContent;
+        var at = text.toLowerCase().indexOf(needle);
+        if (!needle || at < 0) return;
+        var mark = document.createElement('mark');
+        mark.textContent = text.slice(at, at + needle.length);
+        name.textContent = '';
+        name.append(text.slice(0, at), mark, text.slice(at + needle.length));
+    }
+
+    // Empty box: every product. Otherwise names containing the query, with
+    // ones that start with it first, then ones where a word starts with it.
+    function render() {
+        var needle = fold(input.value);
+        var hits;
+        if (!needle) {
+            hits = all.filter(function (a) { return a.dataset.kind === 'product'; });
+        } else {
+            hits = all
+                .map(function (a, i) {
+                    var key = a.dataset.key, at = key.indexOf(needle);
+                    if (at < 0) return null;
+                    var rank = at === 0 ? 0 : key.charAt(at - 1) === ' ' ? 1 : 2;
+                    return { a: a, rank: rank, i: i };
+                })
+                .filter(Boolean)
+                .sort(function (x, y) { return x.rank - y.rank || x.i - y.i; })
+                .map(function (h) { return h.a; });
+        }
+        box.replaceChildren.apply(box, hits.map(function (a) {
+            var el = a.cloneNode(true);
+            highlight(el, needle);
+            return el;
+        }));
+        box.scrollTop = 0;
+        input.setAttribute('aria-expanded', hits.length ? 'true' : 'false');
+    }
+    function close() { box.replaceChildren(); input.setAttribute('aria-expanded', 'false'); }
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    // autofocus fires before this script runs: a click still opens the list.
+    input.addEventListener('click', function () { if (!box.children.length) render(); });
     document.addEventListener('click', function (e) {
         if (!e.target.closest('.search-wrap')) close();
     });
     document.addEventListener('keydown', function (e) {
         var links = Array.prototype.slice.call(box.querySelectorAll('a'));
-        if (e.key === 'Escape') { close(); input.focus(); return; }
+        if (e.key === 'Escape') { input.focus(); close(); return; }
         if (!links.length || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
         var i = links.indexOf(document.activeElement);
         e.preventDefault();

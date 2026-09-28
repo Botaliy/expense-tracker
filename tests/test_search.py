@@ -26,12 +26,18 @@ def test_empty_search_shows_often_bought(logged_in_client):
     assert page.index("Kaffee Crema<span>3×</span>") < page.index("Milch<span>1×</span>")
 
 
+def _results(page):
+    """The page without the dropdown, which lists every name regardless of the query."""
+    before, _, rest = page.partition('<template id="all-names">')
+    return before + rest.partition("</template>")[2]
+
+
 def test_search_is_case_and_accent_insensitive(logged_in_client):
     _add(logged_in_client, "KAFFEE CREMA 1KG", "12,99", store="Lidl")
     _add(logged_in_client, "CAFÉ SOLO", "1,80", store="Bar Pepe")
     _add(logged_in_client, "Milch", "1,10", store="Lidl")
 
-    page = logged_in_client.get("/search", params={"q": "kaffee"}).text
+    page = _results(logged_in_client.get("/search", params={"q": "kaffee"}).text)
     assert "KAFFEE CREMA 1KG" in page
     assert "CAFÉ SOLO" not in page
     assert "Milch" not in page
@@ -56,24 +62,31 @@ def test_nothing_found(logged_in_client):
     assert "ничего не нашлось по «кофе»" in page
 
 
-def test_suggestions_come_from_recorded_names(logged_in_client):
-    _add(logged_in_client, "Kaffee Crema", "12,99", store="Lidl")
-    _add(logged_in_client, "Kaffee Crema", "12,99", store="Lidl")
-    _add(logged_in_client, "Eiskaffee", "2,49", store="Kafe Mokka")
-    _add(logged_in_client, "Milch", "1,10", store="Lidl")
+def _dropdown(page):
+    return page.split('<template id="all-names">')[1].split("</template>")[0]
 
-    html = logged_in_client.get("/search/suggest", params={"q": "kaf"}).text
+
+def test_dropdown_lists_every_recorded_name(logged_in_client):
+    _add(logged_in_client, "Kaffee Crema", "12,99", store="Lidl")
+    _add(logged_in_client, "Kaffee Crema", "12,99", store="Lidl")
+    _add(logged_in_client, "KAFFEE  CREMA", "12,99", store="Lidl")
+    _add(logged_in_client, "Milch", "1,10", store="Kafe Mokka")
+
+    html = _dropdown(logged_in_client.get("/search").text)
     names = [line.strip() for line in html.split("\n") if 'class="name"' in line]
-    # Prefix matches first, then the rest; stores are suggested too.
+    # Most bought first; one entry per product despite spelling; stores too.
     assert names == [
         '<span class="name">Kaffee Crema</span>',
+        '<span class="name">Lidl</span>',
+        '<span class="name">Milch</span>',
         '<span class="name">Kafe Mokka</span>',
-        '<span class="name">Eiskaffee</span>',
     ]
-    assert "Milch" not in html
-    assert "2 раза" in html  # Kaffee Crema bought twice
+    assert 'data-key="kaffee crema" data-kind="product"' in html
+    assert 'data-key="lidl" data-kind="store"' in html
+    assert "3 раза" in html  # Kaffee Crema bought three times
 
-    assert logged_in_client.get("/search/suggest", params={"q": " "}).text.strip() == ""
+    # The list is there on the results page too, for refining the query.
+    assert "Kafe Mokka" in _dropdown(logged_in_client.get("/search", params={"q": "milch"}).text)
 
 
 def test_store_suggestion_counts_visits_not_items(logged_in_client):
@@ -87,14 +100,15 @@ def test_store_suggestion_counts_visits_not_items(logged_in_client):
         db.add(receipt)
         db.commit()
 
-    html = logged_in_client.get("/search/suggest", params={"q": "lidl"}).text
-    assert "1 раз ·" in html
+    html = _dropdown(logged_in_client.get("/search").text)
+    store = html[html.index('data-kind="store"'):]
+    assert "1 раз ·" in store
 
 
 def test_search_ignores_items_older_than_a_year(logged_in_client):
     _add(logged_in_client, "Пиво старое", "3", day=date.today().replace(year=date.today().year - 2))
     _add(logged_in_client, "Пиво свежее", "4")
-    page = logged_in_client.get("/search", params={"q": "пиво"}).text
+    page = _results(logged_in_client.get("/search", params={"q": "пиво"}).text)
     assert "Пиво свежее" in page
     assert "Пиво старое" not in page
 

@@ -83,7 +83,7 @@ def known_names(db: Session, start: date, end: date) -> list[dict]:
 
     Items without a product yet fall back to their receipt text. Spellings that
     differ only in case or spacing are one name, shown the way it was written
-    most often. Feeds both the suggestions and "often bought".
+    most often. Feeds both the dropdown under the search box and "often bought".
     """
     groups: dict[tuple[str, str], dict] = {}
     for m in _period_items(db, start, end):
@@ -111,16 +111,6 @@ def known_names(db: Session, start: date, end: date) -> list[dict]:
         group["count"] = len(visits) if group["kind"] == "store" else items
         names.append(group)
     return sorted(names, key=lambda n: (-n["count"], -n["amount"]))
-
-
-def suggest(names: list[dict], query: str, limit: int = 8) -> list[dict]:
-    """Names containing the query; ones that start with it come first."""
-    needle = _fold(query)
-    if not needle:
-        return []
-    hits = [n for n in names if needle in n["key"]]
-    hits.sort(key=lambda n: (not n["key"].startswith(needle), -n["count"]))
-    return hits[:limit]
 
 
 def search_period(today: date) -> tuple[date, date, list[tuple[int, int]]]:

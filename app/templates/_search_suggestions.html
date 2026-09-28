@@ -1,5 +1,6 @@
-{% for s in suggestions %}
-<a class="suggestion" href="/search?q={{ s.name|urlencode }}" role="option">
+{# Every known name, filtered letter by letter in the browser (see search.html). #}
+{% for s in names %}
+<a class="suggestion" href="/search?q={{ s.name|urlencode }}" role="option" data-key="{{ s.key }}" data-kind="{{ s.kind }}">
     <span class="kind" aria-hidden="true">{% if s.kind == 'store' %}🏪{% else %}🏷️{% endif %}</span>
     <span class="name">{{ s.name }}</span>
     <span class="stat">{{ plural(s.count, 'раз', 'раза', 'раз') }} · {{ (s.amount|round)|money }}</span>

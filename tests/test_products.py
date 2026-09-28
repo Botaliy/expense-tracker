@@ -169,11 +169,11 @@ def test_search_by_product_across_languages(logged_in_client):
     assert "Что вошло" in page
     assert "coffee to go <b>6" in page  # two purchases grouped under one product
 
-    suggestions = logged_in_client.get("/search/suggest", params={"q": "cof"}).text
+    often = logged_in_client.get("/search").text
+    suggestions = often.split('<template id="all-names">')[1].split("</template>")[0]
     assert '<span class="name">coffee to go</span>' in suggestions
     assert "KAFFEE" not in suggestions  # products are suggested, not raw receipt text
 
-    often = logged_in_client.get("/search").text
     assert "coffee to go<span>2×</span>" in often
 
 

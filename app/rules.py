@@ -31,15 +31,23 @@ class RuleMatch:
     product: str | None
 
 
-def find_rule(db: Session, description: str, store_name: str | None) -> CategoryRule | None:
-    """This store's rule for the text, else one learned without a store."""
+def find_rule(
+    db: Session, description: str, store_name: str | None, any_store: bool = False
+) -> CategoryRule | None:
+    """This store's rule for the text, else one learned without a store.
+
+    ``any_store``: the store isn't known yet (a bank statement line), so a rule
+    learned in any store will do, the most recent one first.
+    """
     key = fold(description)
     if not key:
         return None
-    rules = {
-        r.store_key: r
-        for r in db.scalars(select(CategoryRule).where(CategoryRule.key == key))
-    }
+    found = list(db.scalars(
+        select(CategoryRule).where(CategoryRule.key == key).order_by(CategoryRule.updated_at.desc())
+    ))
+    if any_store:
+        return found[0] if found else None
+    rules = {r.store_key: r for r in found}
     return rules.get(fold(store_name)) or rules.get("")
 
 

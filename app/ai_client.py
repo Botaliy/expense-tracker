@@ -343,3 +343,163 @@ def label_products(
         if isinstance(label, dict) and isinstance(label.get("n"), int):
             by_number[label["n"]] = normalize_product(label.get("product"))
     return [by_number.get(n) for n in range(1, len(items) + 1)]
+
+
+STATEMENT_TOOL_NAME = "label_statement"
+
+STATEMENT_TOOL = {
+    "name": STATEMENT_TOOL_NAME,
+    "description": "Report category, product and shop for each numbered bank statement line.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "lines": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "n": {"type": "integer", "description": "The line's number."},
+                        "category": {"type": "string", "enum": CATEGORIES},
+                        "product": {
+                            "type": "string",
+                            "description": "Short generic English name of what was paid for, e.g. 'groceries', 'taxi', 'rent'.",
+                        },
+                        "store": {
+                            "type": "string",
+                            "description": "Merchant as customers know it ('Alphamega', 'Wolt', 'Bolt'), "
+                            "without legal suffixes, city, card or terminal numbers.",
+                        },
+                    },
+                    "required": ["n", "category", "product", "store"],
+                },
+            }
+        },
+        "required": ["lines"],
+    },
+}
+
+STATEMENT_PROMPT = (
+    "These are card payments and transfers from a personal bank statement (Cyprus: "
+    "Revolut or Bank of Cyprus), one merchant descriptor per numbered line. For each, "
+    "pick the closest category from this fixed list: "
+    f"{', '.join(CATEGORIES)}. {CATEGORY_GUIDANCE} "
+    "A supermarket payment is 'Продукты' unless the merchant is clearly something else; "
+    f"if nothing fits, use '{DEFAULT_CATEGORY}'. "
+    f"{PRODUCT_GUIDANCE} "
+    "Label every numbered line. Use the label_statement tool."
+)
+
+
+def classify_statement(
+    descriptions: list[str], known: list[str] | None = None, stores: list[str] | None = None
+) -> list["StatementLabel | None"]:
+    """Category, product and clean shop name per statement line, same order.
+
+    Raises ``ExpenseCategorizationError`` on API failure.
+    """
+    if not descriptions:
+        return []
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise ExpenseCategorizationError("ANTHROPIC_API_KEY is not configured")
+
+    numbered = "\n".join(f"{n}. {d}" for n, d in enumerate(descriptions, start=1))
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    try:
+        response = client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=8192,
+            tools=[STATEMENT_TOOL],
+            tool_choice={"type": "tool", "name": STATEMENT_TOOL_NAME},
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{STATEMENT_PROMPT}\n\n{vocabulary_prompt(known or [])}\n\n"
+                    f"{stores_prompt(stores or [])}\n\n{numbered}",
+                }
+            ],
+        )
+    except Exception as exc:  # network/auth/rate-limit errors from the SDK
+        raise ExpenseCategorizationError(f"Anthropic API call failed: {exc}") from exc
+
+    usage.record_call(usage.STATEMENT, response)
+
+    tool_use_block = next(
+        (block for block in response.content if block.type == "tool_use"), None
+    )
+    if tool_use_block is None:
+        raise ExpenseCategorizationError("Model did not return labels")
+
+    by_number: dict[int, StatementLabel] = {}
+    for line in tool_use_block.input.get("lines") or []:
+        if isinstance(line, dict) and isinstance(line.get("n"), int):
+            store = (line.get("store") or "").strip() or None
+            by_number[line["n"]] = StatementLabel(
+                category=normalize_category(line.get("category")),
+                product=normalize_product(line.get("product")),
+                store=store[:255] if store else None,
+            )
+    return [by_number.get(n) for n in range(1, len(descriptions) + 1)]
+
+
+@dataclass
+class StatementLabel:
+    category: str
+    product: str | None
+    store: str | None
+
+
+COLUMNS_TOOL_NAME = "describe_columns"
+
+COLUMNS_TOOL = {
+    "name": COLUMNS_TOOL_NAME,
+    "description": "Say which columns of a bank statement CSV hold what.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "found": {"type": "boolean", "description": "False if this isn't a list of transactions."},
+            "header_row": {"type": "integer", "description": "0-based index of the header row."},
+            "date": {"type": "integer", "description": "0-based column of the transaction date."},
+            "description": {"type": "integer", "description": "0-based column of the merchant/description."},
+            "amount": {"type": "integer", "description": "Column with a signed amount, if there is one."},
+            "debit": {"type": "integer", "description": "Column with money out only, if amounts are split."},
+            "currency": {"type": "integer"},
+            "spent_negative": {
+                "type": "boolean",
+                "description": "For a signed amount column: true if money spent is negative.",
+            },
+        },
+        "required": ["found"],
+    },
+}
+
+
+def map_statement_columns(rows: list[list[str]]) -> dict | None:
+    """Ask the model which column is which, for a layout not recognised by name.
+
+    Returns the tool input (see COLUMNS_TOOL), or None. Only the first rows are sent.
+    """
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        return None
+    sample = "\n".join(f"{i}: {row}" for i, row in enumerate(rows[:20]))
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    try:
+        response = client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=512,
+            tools=[COLUMNS_TOOL],
+            tool_choice={"type": "tool", "name": COLUMNS_TOOL_NAME},
+            messages=[{
+                "role": "user",
+                "content": "Here are the first rows of a bank statement export, one Python list per "
+                "row. Identify the header row and the columns. Use the describe_columns tool.\n\n" + sample,
+            }],
+        )
+    except Exception:
+        return None
+    usage.record_call(usage.STATEMENT, response)
+    block = next((b for b in response.content if b.type == "tool_use"), None)
+    if block is None or not block.input.get("found"):
+        return None
+    return block.input

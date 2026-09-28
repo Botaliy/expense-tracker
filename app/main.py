@@ -11,6 +11,7 @@ from app.database import init_db
 from app.receipts import fail_interrupted_receipts
 from app.routers import (
     auth,
+    bank,
     dashboard,
     forecast,
     more,
@@ -50,3 +51,4 @@ app.include_router(search.router)
 app.include_router(usage.router)
 app.include_router(forecast.router)
 app.include_router(more.router)
+app.include_router(bank.router)

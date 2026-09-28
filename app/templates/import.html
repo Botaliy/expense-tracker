@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Импорт выписки{% endblock %}
+{% block head %}
+<style>
+    .drop { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .drop input[type=file] { flex: 1; min-width: 0; }
+    .howto { font-size: 13px; color: var(--muted); margin: 10px 0 0; padding-left: 18px; }
+    .howto li { margin-bottom: 4px; }
+    .note { border-radius: 14px; padding: 10px 14px; font-size: 14px; background: var(--accent-soft); }
+    .txn {
+        display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 12px; align-items: center;
+        padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; margin: 0;
+        text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 400; color: var(--text);
+    }
+    .txn:first-of-type { border-top: 0; }
+    .txn input { width: 18px; height: 18px; accent-color: var(--accent); }
+    .txn .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .txn .m { font-size: 13px; color: var(--muted); }
+    .txn .a { font-weight: 700; white-space: nowrap; }
+    .txn:has(input:not(:checked)) .t, .txn:has(input:not(:checked)) .a { color: var(--muted); text-decoration: line-through; }
+    .bar { position: sticky; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; }
+    .bar .btn-primary { flex: 1; box-shadow: var(--shadow); }
+</style>
+{% endblock %}
+{% block content %}
+<main class="sub-page">
+    <a class="back" href="/more">‹ Ещё</a>
+
+    {% if error %}<p class="error" style="margin:0">{{ error }}</p>{% endif %}
+    {% if added is not none %}
+    <div class="note" role="status">
+        {% if added %}Новых операций: {{ added }}{% if matched %}, из них {{ matched }} совпали с чеками{% endif %}.{% else %}Новых операций нет.{% endif %}
+        {% if seen %}Уже импортированных пропущено: {{ seen }}.{% endif %}
+    </div>
+    {% endif %}
+    {% if created is not none %}
+    <div class="note" role="status">Готово: добавлено трат {{ created }}{% if linked %}, привязано к чекам {{ linked }}{% endif %}.</div>
+    {% endif %}
+
+    {% if rows %}
+    <form method="post" action="/import/confirm" class="sub-page">
+        {% if matched_rows %}
+        <section class="panel">
+            <h2>Уже есть чек</h2>
+            <p class="lead">Сумма до цента и дата ±2 дня совпали с тем, что уже записано. Эти операции не создадут новых трат, только привяжутся к чекам. Сними галочку, если это на самом деле другая покупка.</p>
+            {% for t in matched_rows %}{% set r = matches[t.match_receipt_id] %}
+            <label class="txn">
+                <input type="checkbox" name="keep" value="{{ t.id }}" checked>
+                <input type="hidden" name="include" value="{{ t.id }}">
+                <span style="min-width:0">
+                    <span class="t">{{ t.description }}</span><br>
+                    <span class="m">{{ t.booked_on|short_date }} → <a href="/receipts/{{ r.id }}" target="_blank">{{ r.store_name or ('Чек #' ~ r.id) }}, {{ (r.purchase_date or r.uploaded_at.date())|short_date }}</a></span>
+                </span>
+                <span class="a num">{{ t.amount|money(t.currency) }}</span>
+            </label>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        {% if new_rows %}
+        <section class="panel">
+            <h2>Новые траты</h2>
+            <p class="lead">Категорию и магазин подберёт Claude (или твои правила). Переводы выключены по умолчанию: это может быть аренда, а может перевод самому себе.</p>
+            {% for t in new_rows %}
+            <label class="txn">
+                <input type="checkbox" name="include" value="{{ t.id }}" {% if default_included(t) %}checked{% endif %}>
+                <span style="min-width:0">
+                    <span class="t">{{ t.description }}</span><br>
+                    <span class="m">{{ t.booked_on|short_date }}{% if t.kind == 'transfer' %} · <span class="pill">перевод</span>{% elif t.kind == 'fee' %} · <span class="pill">комиссия</span>{% endif %}</span>
+                </span>
+                <span class="a num">{{ t.amount|money(t.currency) }}</span>
+            </label>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        <div class="bar">
+            <button type="submit" class="btn btn-primary">Импортировать</button>
+            <button type="submit" class="btn btn-secondary" formaction="/import/discard" formnovalidate>Отменить</button>
+        </div>
+    </form>
+    {% else %}
+    <section class="panel">
+        <h2>Импорт выписки</h2>
+        <p class="lead">
+            Траты по карте без бумажного чека (онлайн, подписки, такси) попадут в учёт.
+            Покупки, для которых чек уже загружен, не задвоятся: перед импортом покажу, что с чем совпало.
+            Загружать один и тот же период повторно тоже безопасно.
+        </p>
+        <form method="post" action="/import" enctype="multipart/form-data" class="drop">
+            <input type="file" name="file" accept=".csv,text/csv,text/plain" required>
+            <button type="submit" class="btn btn-primary">Загрузить</button>
+        </form>
+        <ul class="howto">
+            <li><b>Revolut</b>: счёт → ⋯ → Выписка → формат Excel/CSV.</li>
+            <li><b>Bank of Cyprus</b>: 1bank → счёт → Export → CSV. Колонки определятся сами.</li>
+        </ul>
+    </section>
+    {% if history %}
+    <section class="panel">
+        <h2>Уже импортировано</h2>
+        <p class="lead" style="margin:0">
+            Добавлено трат: {{ history.get('created', 0) }} · привязано к чекам: {{ history.get('matched', 0) }} · пропущено: {{ history.get('skipped', 0) }}
+        </p>
+    </section>
+    {% endif %}
+    {% endif %}
+</main>
+{% endblock %}

@@ -210,6 +210,7 @@
                         <div class="title">{{ e.title }}</div>
                         <div class="meta">
                             {% if e.is_duplicate %}<span class="dup-tag">дубль?</span>{% endif %}
+                            {% if r.source == 'bank' %}🏦 {% endif %}
                             {{ e.categories|join(', ') or 'Без позиций' }} ·
                             {% if e.is_manual %}{{ e.first_description if r.store_name else 'вручную' }}{% else %}{{ plural(e.item_count, 'позиция', 'позиции', 'позиций') }}{% endif %}
                         </div>

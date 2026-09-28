@@ -45,6 +45,8 @@ class Receipt(Base):
     image_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # Set when the user said a look-alike receipt isn't a duplicate. See app.duplicates.
     not_duplicate: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # "bank" for expenses created from a statement import; None otherwise.
+    source: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     items: Mapped[list["LineItem"]] = relationship(
         back_populates="receipt", cascade="all, delete-orphan"
@@ -114,4 +116,31 @@ class CategoryRule(Base):
     hits: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
+
+
+class BankTransaction(Base):
+    """One card payment from an imported bank statement. See app.bank_import."""
+
+    __tablename__ = "bank_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bank: Mapped[str] = mapped_column(String(32))
+    # Stable hash of the statement row, so importing the same file twice is a no-op.
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True)
+    booked_on: Mapped[date] = mapped_column(Date)
+    amount: Mapped[float] = mapped_column(Float)  # money spent, positive
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    description: Mapped[str] = mapped_column(String(255))
+    # card (a purchase), transfer (could be rent, could be to yourself), fee
+    kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # pending (waiting in the preview), created, matched (an existing receipt), skipped
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    # The receipt it created or was matched to; plain column so deleting a receipt
+    # doesn't take the statement row with it.
+    receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # Suggested match shown in the preview, before the user confirms.
+    match_receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC)
     )

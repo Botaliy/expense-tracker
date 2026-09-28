@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.ai_client import ReceiptExtractionError, extract_receipt_data
+from app.bank_import import absorb_bank_twin
 from app.categories import normalize_category
 from app.config import get_settings
 from app.models import LineItem, Receipt, ReceiptStatus
@@ -134,6 +135,9 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
     # Totals are always the sum of line items, so the receipt and the dashboard
     # (which aggregates line items) never disagree.
     receipt.total_amount = round(sum(item.amount for item in receipt.items), 2)
+
+    # Already imported from a bank statement? The photo, with its items, wins.
+    absorb_bank_twin(db, receipt)
 
     db.commit()
     db.refresh(receipt)

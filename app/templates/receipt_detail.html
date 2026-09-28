@@ -49,6 +49,9 @@
     .banner { border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
     .banner.failed { background: var(--danger-soft); }
     .banner.failed b { color: var(--danger); }
+    .banner.warn { background: var(--danger-soft); }
+    .banner.warn b { color: var(--danger); }
+    .banner.info { background: var(--accent-soft); }
     .banner.pending { background: var(--surface); box-shadow: var(--shadow); flex-direction: row; align-items: center; gap: 12px; }
     .banner .why { font-size: 13px; color: var(--muted); word-break: break-word; }
     .banner .acts { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -175,6 +178,31 @@
             {% endif %}
         </div>
     </section>
+
+    {% if same_photo %}
+    <div class="banner info" role="status">
+        <div><b>Это фото уже загружено</b><div class="why">Открыл чек, который был по нему создан, повторно не распознаю.</div></div>
+    </div>
+    {% endif %}
+    {% if duplicate %}
+    <div class="banner warn">
+        <div>
+            <b>Похоже на дубль</b>
+            <div class="why">
+                <a href="/receipts/{{ duplicate.id }}">{{ duplicate.store_name }}, {{ (duplicate.purchase_date or duplicate.uploaded_at.date())|human_date|lower }}</a>:
+                тот же магазин, день и сумма {{ duplicate.total_amount|money(duplicate.currency) }}.
+            </div>
+        </div>
+        <div class="acts">
+            <form method="post" action="/receipts/{{ r.id }}/delete">
+                <button type="submit" class="btn btn-danger btn-sm">Удалить этот</button>
+            </form>
+            <form method="post" action="/receipts/{{ r.id }}/not-duplicate">
+                <button type="submit" class="btn btn-ghost btn-sm">Это разные покупки</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
     {% if r.status.value == 'pending' %}
     <div class="banner pending">

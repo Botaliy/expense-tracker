@@ -23,6 +23,7 @@ from app.auth import get_current_user
 from app.categories import CATEGORIES, DEFAULT_CATEGORY
 from app.database import get_db
 from app import rules
+from app.duplicates import find_duplicate, same_photo, sha256
 from app.feed import month_feed
 from app.models import LineItem, Receipt, ReceiptStatus
 from app.products import known_products, normalize_product
@@ -118,8 +119,14 @@ def upload_receipt(
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
 
+    digest = sha256(content)
+    existing = same_photo(db, digest)
+    if existing is not None:
+        # Same file again: no second model call, no second expense.
+        return RedirectResponse(url=f"/receipts/{existing.id}?dup=photo", status_code=303)
+
     image_path = save_upload(file.filename or "receipt.jpg", content)
-    receipt = create_receipt(db, image_path)
+    receipt = create_receipt(db, image_path, digest)
     background_tasks.add_task(process_receipt_in_background, receipt.id)
 
     return RedirectResponse(url=_home_url(None, receipt.id), status_code=303)
@@ -184,7 +191,12 @@ def add_manual_expense(
 
 
 @router.get("/receipts/{receipt_id}", response_class=HTMLResponse)
-def receipt_detail(request: Request, receipt_id: int, db: Session = Depends(get_db)):
+def receipt_detail(
+    request: Request,
+    receipt_id: int,
+    dup: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
     receipt = _get_receipt(db, receipt_id)
 
     by_category: dict[str, float] = {}
@@ -201,8 +213,22 @@ def receipt_detail(request: Request, receipt_id: int, db: Session = Depends(get_
             "back_url": _home_url(_receipt_day(receipt), receipt.id),
             "known_products": known_products(db),
             "categories": CATEGORIES,
+            "duplicate": find_duplicate(db, receipt),
+            "same_photo": dup == "photo",
         },
     )
+
+
+@router.post("/receipts/{receipt_id}/not-duplicate")
+def mark_not_duplicate(receipt_id: int, db: Session = Depends(get_db)):
+    receipt = _get_receipt(db, receipt_id)
+    twin = find_duplicate(db, receipt)
+    receipt.not_duplicate = True
+    # Both sides: otherwise the twin would still point back at this one.
+    if twin is not None:
+        twin.not_duplicate = True
+    db.commit()
+    return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
 
 
 @router.post("/receipts/{receipt_id}", response_class=HTMLResponse)

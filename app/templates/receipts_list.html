@@ -53,6 +53,10 @@
     .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .meta { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .amt { font-weight: 700; text-align: right; white-space: nowrap; }
+    .dup-tag {
+        display: inline-block; font-size: 11px; font-weight: 700; color: var(--danger); background: var(--danger-soft);
+        border-radius: 6px; padding: 1px 6px; margin-right: 4px; vertical-align: 1px;
+    }
 
     .row.failed .ico { background: var(--danger-soft); color: var(--danger); font-weight: 800; }
     .row.failed .meta { color: var(--danger); }
@@ -205,6 +209,7 @@
                     <div style="min-width:0">
                         <div class="title">{{ e.title }}</div>
                         <div class="meta">
+                            {% if e.is_duplicate %}<span class="dup-tag">дубль?</span>{% endif %}
                             {{ e.categories|join(', ') or 'Без позиций' }} ·
                             {% if e.is_manual %}{{ e.first_description if r.store_name else 'вручную' }}{% else %}{{ plural(e.item_count, 'позиция', 'позиции', 'позиций') }}{% endif %}
                         </div>

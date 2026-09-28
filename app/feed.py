@@ -6,6 +6,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.duplicates import duplicate_ids
 from app.models import LineItem, Receipt, ReceiptStatus
 from app.stats import effective_date
 
@@ -19,6 +20,8 @@ class FeedEntry:
     categories: list[str]
     item_count: int
     first_description: str | None
+    # Same store, day and total as another entry: probably recorded twice.
+    is_duplicate: bool = False
 
     @property
     def is_manual(self) -> bool:
@@ -71,6 +74,7 @@ def month_feed(db: Session, start: date, end: date) -> list[FeedDay]:
         counts[receipt_id] = counts.get(receipt_id, 0) + count
         first_desc.setdefault(receipt_id, description)
 
+    duplicates = duplicate_ids(rows)
     days: list[FeedDay] = []
     for receipt, day in rows:
         cats = sorted(per_category.get(receipt.id, []), key=lambda c: -c[1])
@@ -84,6 +88,7 @@ def month_feed(db: Session, start: date, end: date) -> list[FeedDay]:
             categories=[c for c, _ in cats],
             item_count=counts.get(receipt.id, 0),
             first_description=first_desc.get(receipt.id),
+            is_duplicate=receipt.id in duplicates,
         )
         if not days or days[-1].day != day:
             days.append(FeedDay(day=day))

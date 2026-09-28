@@ -51,9 +51,11 @@ def save_upload(filename: str, content: bytes) -> Path:
     return dest
 
 
-def create_receipt(db: Session, image_path: Path) -> Receipt:
+def create_receipt(db: Session, image_path: Path, image_sha256: str | None = None) -> Receipt:
     # Stored relative to the upload directory (which is served at /uploads).
-    receipt = Receipt(image_path=image_path.name, status=ReceiptStatus.PENDING)
+    receipt = Receipt(
+        image_path=image_path.name, status=ReceiptStatus.PENDING, image_sha256=image_sha256
+    )
     db.add(receipt)
     db.commit()
     db.refresh(receipt)

@@ -2,6 +2,7 @@ import enum
 from datetime import UTC, date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Enum,
@@ -40,6 +41,10 @@ class Receipt(Base):
         Enum(ReceiptStatus), default=ReceiptStatus.PENDING
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # sha256 of the uploaded photo: the same file uploaded twice isn't recognized twice.
+    image_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Set when the user said a look-alike receipt isn't a duplicate. See app.duplicates.
+    not_duplicate: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     items: Mapped[list["LineItem"]] = relationship(
         back_populates="receipt", cascade="all, delete-orphan"

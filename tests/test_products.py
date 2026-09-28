@@ -71,7 +71,7 @@ def test_receipt_recognition_stores_products_and_sends_vocabulary(logged_in_clie
     with patch("app.receipts.extract_receipt_data", return_value=extraction) as extract:
         logged_in_client.post("/receipts", files={"file": ("r.jpg", io.BytesIO(b"x"), "image/jpeg")})
         # The second receipt sees the first one's products as the vocabulary.
-        logged_in_client.post("/receipts", files={"file": ("r.jpg", io.BytesIO(b"x"), "image/jpeg")})
+        logged_in_client.post("/receipts", files={"file": ("r.jpg", io.BytesIO(b"y"), "image/jpeg")})
 
     assert extract.call_args_list[0].args[1] == []
     assert set(extract.call_args_list[1].args[1]) == {"coffee beans", "milk"}

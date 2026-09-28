@@ -163,3 +163,82 @@ def nice_ticks(max_value: float, count: int = 4) -> list[float]:
     while ticks[-1] < max_value:
         ticks.append(ticks[-1] + step)
     return ticks
+
+
+# Before this, a single purchase swings the pace too much to be worth showing.
+FORECAST_FROM_DAY = 5
+
+
+def month_forecast(db: Session, year: int, mon: int, total: float) -> dict | None:
+    """End-of-month projection at the current pace, for the current month only.
+
+    Compared with the average of the previous three months that have any
+    spending, rather than just last month, which may have been unusual.
+    """
+    today = date.today()
+    if (year, mon) != (today.year, today.month) or today.day < FORECAST_FROM_DAY or total <= 0:
+        return None
+    days_in_month = calendar.monthrange(year, mon)[1]
+    prev_year, prev_mon = shift_month(year, mon, -1)
+    history = [m["total"] for m in monthly_totals(db, prev_year, prev_mon, 3) if m["total"] > 0]
+    return {
+        "projected": total / today.day * days_in_month,
+        "average": sum(history) / len(history) if history else None,
+        "months_averaged": len(history),
+        "last_day": days_in_month,
+    }
+
+
+def top_items(db: Session, start: date, end: date, limit: int = 5) -> list[dict]:
+    """The month's most expensive line items."""
+    rows = db.execute(
+        select(
+            LineItem.description,
+            LineItem.amount,
+            LineItem.category,
+            Receipt.id,
+            Receipt.store_name,
+            Receipt.currency,
+            effective_date,
+        )
+        .join(Receipt, LineItem.receipt_id == Receipt.id)
+        .where(effective_date >= start, effective_date < end, LineItem.amount > 0)
+        .order_by(LineItem.amount.desc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "description": description,
+            "amount": amount,
+            "category": category,
+            "receipt_id": receipt_id,
+            "store_name": store_name,
+            "currency": currency,
+            "day": day,
+        }
+        for description, amount, category, receipt_id, store_name, currency, day in rows
+    ]
+
+
+def top_places(db: Session, start: date, end: date, limit: int = 5) -> list[dict]:
+    """Stores by money spent. "LIDL" and "Lidl " count as one place."""
+    place_key = func.lower(func.trim(Receipt.store_name))
+    receipt_totals = (
+        select(Receipt.id.label("receipt_id"), func.sum(LineItem.amount).label("amount"))
+        .join(LineItem, LineItem.receipt_id == Receipt.id)
+        .where(effective_date >= start, effective_date < end, Receipt.store_name.is_not(None))
+        .group_by(Receipt.id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(
+            func.min(func.trim(Receipt.store_name)),
+            func.count(),
+            func.sum(receipt_totals.c.amount),
+        )
+        .join(receipt_totals, receipt_totals.c.receipt_id == Receipt.id)
+        .group_by(place_key)
+        .order_by(func.sum(receipt_totals.c.amount).desc())
+        .limit(limit)
+    ).all()
+    return [{"name": name, "visits": visits, "amount": amount} for name, visits, amount in rows]

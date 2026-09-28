@@ -15,47 +15,41 @@
     .hero .cents { font-size: 28px; }
     .hero-sub { color: var(--muted); font-size: 13px; }
 
-    /* ---------- months chart: one series, selected month in the accent ---------- */
-    .chart { --plot-h: 180px; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
-    .y-axis { position: relative; height: var(--plot-h); min-width: 3.2em; }
-    .y-axis span {
-        position: absolute; right: 0; transform: translateY(50%);
-        font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+    /* ---------- forecast meter: spent, projected remainder, average tick ---------- */
+    .forecast { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .fc-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .fc-line b { font-size: 18px; font-variant-numeric: tabular-nums; }
+    .fc-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .fc-bar { position: relative; height: 10px; border-radius: 99px; background: var(--surface-2); margin: 12px 0 8px; display: flex; gap: 2px; }
+    .fc-bar .spent { background: var(--accent); border-radius: 99px 0 0 99px; }
+    .fc-bar .rest {
+        border-radius: 0 99px 99px 0;
+        background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 3px, transparent 3px 6px);
     }
-    .plot { position: relative; height: var(--plot-h); }
-    .gridline { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
-    .cols { position: absolute; inset: 0; display: grid; grid-template-columns: repeat({{ months|length }}, minmax(0, 1fr)); }
-    .col {
-        position: relative; display: flex; justify-content: center; align-items: flex-end;
-        text-decoration: none; color: inherit; border-radius: 10px; outline-offset: 0;
+    .fc-bar .avg { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); border-radius: 2px; }
+    .fc-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+    .fc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .fc-legend i.spent { background: var(--accent); }
+    .fc-legend i.rest { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 3px, transparent 3px 6px); box-shadow: inset 0 0 0 1px var(--line); }
+    .fc-legend i.avg { width: 2px; background: var(--text); border-radius: 2px; }
+
+    /* ---------- top purchases & places ---------- */
+    .top-list { display: flex; flex-direction: column; }
+    .top-row {
+        display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+        padding: 9px 8px; margin: 0 -8px; border-radius: 12px; text-decoration: none; color: inherit;
     }
-    .col:hover { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
-    .bar {
-        width: min(24px, 60%); border-radius: 4px 4px 0 0;
-        background: var(--bar-muted); transition: background .15s ease;
+    a.top-row:hover { background: var(--surface-2); }
+    .top-row .ico {
+        width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 18px;
+        background: color-mix(in srgb, var(--c) 16%, var(--surface));
     }
-    .col.on .bar { background: var(--accent); }
-    .col:hover .bar { background: var(--bar-hover); }
-    .col.on:hover .bar { background: var(--accent); }
-    .cap {
-        position: absolute; left: 50%; transform: translate(-50%, -6px);
-        font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
-    }
-    .tip {
-        position: absolute; left: 50%; transform: translate(-50%, -10px); z-index: 3;
-        background: var(--text); color: var(--bg); border-radius: 10px; padding: 8px 10px;
-        font-size: 12px; line-height: 1.35; white-space: nowrap; pointer-events: none;
-        opacity: 0; transition: opacity .12s ease;
-    }
-    .tip b { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
-    .tip .cents { color: inherit; opacity: .7; }
-    .col:first-child .tip { left: 0; transform: translate(0, -10px); }
-    .col:last-child .tip { left: auto; right: 0; transform: translate(0, -10px); }
-    .col:hover .tip, .col:focus-visible .tip { opacity: 1; }
-    .col:hover .cap, .col:focus-visible .cap { opacity: 0; }
-    .x-axis { grid-column: 2; display: grid; grid-template-columns: repeat({{ months|length }}, minmax(0, 1fr)); margin-top: 6px; }
-    .x-axis span { text-align: center; font-size: 12px; color: var(--muted); }
-    .x-axis span.on { color: var(--text); font-weight: 700; }
+    .top-row .ico.place { font-size: 15px; font-weight: 700; color: var(--muted); background: var(--surface-2); }
+    .top-row .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .top-row .m { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .top-row .amt { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .place-bar { height: 4px; border-radius: 99px; background: var(--surface-2); margin-top: 5px; }
+    .place-bar span { display: block; height: 100%; border-radius: 99px; background: var(--accent); min-width: 4px; }
 
     /* ---------- categories ---------- */
     .cats { display: flex; flex-direction: column; }
@@ -91,15 +85,6 @@
     .purchase .what span { color: var(--muted); }
     .purchase .amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 
-    .sr-only {
-        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-        overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-    }
-
-    :root { --bar-muted: #c9d3ce; --bar-hover: #a9b8b1; }
-    @media (prefers-color-scheme: dark) {
-        :root { --bar-muted: #34403b; --bar-hover: #4a5852; }
-    }
 </style>
 {% endblock %}
 {% block content %}
@@ -120,6 +105,38 @@
             {% if s.total %}≈ {{ (s.per_day|round)|money }} в день{% else %}В этом месяце трат нет{% endif %}
             {%- if s.is_current %} · на {{ s.today.day }} {{ s.month_genitive }}{% endif %}
         </div>
+
+        {% if forecast %}
+        {% set fc = forecast %}
+        {% set scale = [fc.projected, fc.average or 0]|max * 1.04 %}
+        <div class="forecast">
+            <div class="fc-line">
+                <span>Прогноз на {{ fc.last_day }} {{ s.month_genitive }}</span>
+                <b>≈ {{ (fc.projected|round)|money }}</b>
+            </div>
+            <div class="fc-sub">
+                {% if fc.average %}
+                {% set pct = ((fc.projected / fc.average - 1) * 100)|round|int %}
+                В среднем за {{ plural(fc.months_averaged, 'месяц', 'месяца', 'месяцев') }}: {{ (fc.average|round)|money }}
+                {% if pct|abs < 3 %}· примерно как обычно
+                {% else %}· <span class="delta {{ 'up' if pct > 0 else 'down' }}">{{ '↑' if pct > 0 else '↓' }} на {{ pct|abs }}% {{ 'больше' if pct > 0 else 'меньше' }}</span>
+                {% endif %}
+                {% else %}Сравнить пока не с чем: это первый месяц с тратами.
+                {% endif %}
+            </div>
+            <div class="fc-bar" role="img"
+                 aria-label="Потрачено {{ s.total|money|striptags }}, прогноз {{ (fc.projected|round)|money|striptags }}{% if fc.average %}, среднее {{ (fc.average|round)|money|striptags }}{% endif %}">
+                <span class="spent" style="width: {{ s.total / scale * 100 }}%"></span>
+                <span class="rest" style="width: {{ (fc.projected - s.total) / scale * 100 }}%"></span>
+                {% if fc.average %}<span class="avg" style="left: {{ fc.average / scale * 100 }}%"></span>{% endif %}
+            </div>
+            <div class="fc-legend" aria-hidden="true">
+                <span><i class="spent"></i>потрачено</span>
+                <span><i class="rest"></i>ещё ≈ {{ ((fc.projected - s.total)|round)|money }} при таком темпе</span>
+                {% if fc.average %}<span><i class="avg"></i>среднее</span>{% endif %}
+            </div>
+        </div>
+        {% endif %}
     </section>
 
     <section class="panel" aria-labelledby="months-title">
@@ -127,43 +144,10 @@
             <h2 id="months-title">По месяцам</h2>
             <span class="muted">{{ currency_symbol }}, нажми на месяц</span>
         </div>
-        <div class="chart">
-            <div class="y-axis" aria-hidden="true">
-                {% for t in ticks %}<span style="bottom: {{ t / axis_max * 100 }}%">{{ t|compact_number }}</span>{% endfor %}
-            </div>
-            <div class="plot">
-                {% for t in ticks %}<div class="gridline" style="bottom: {{ t / axis_max * 100 }}%"></div>{% endfor %}
-                <div class="cols">
-                    {% for m in months %}
-                    {% set pct = m.total / axis_max * 100 %}
-                    <a class="col {{ 'on' if m.key == month else '' }}" href="/dashboard?month={{ m.key }}"
-                       aria-label="{{ m.name }}: {{ m.total|money|striptags }}"{% if m.key == month %} aria-current="page"{% endif %}>
-                        <span class="bar" style="height: {{ pct }}%{% if m.total > 0 %}; min-height: 3px{% endif %}"></span>
-                        {% if m.key == month and m.total > 0 %}
-                        <span class="cap" style="bottom: {{ pct }}%">{{ m.total|round|money }}</span>
-                        {% endif %}
-                        <span class="tip" aria-hidden="true" style="bottom: {{ [pct, 30]|max }}%">
-                            {{ m.name }}
-                            <b>{{ m.total|money }}</b>
-                            {% if m.top_category %}больше всего: {{ m.top_category|cat_emoji }} {{ m.top_category }}{% endif %}
-                        </span>
-                    </a>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="x-axis" aria-hidden="true">
-                {% for m in months %}<span class="{{ 'on' if m.key == month else '' }}">{{ m.short }}</span>{% endfor %}
-            </div>
-        </div>
-        {# The same numbers as a table for screen readers. #}
-        <table class="sr-only">
-            <caption>Траты по месяцам</caption>
-            <tbody>
-            {% for m in months %}
-                <tr><th scope="row">{{ m.name }}</th><td>{{ m.total|money }}</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
+        {% set selected = month %}
+        {% set link_base = '/dashboard' %}
+        {% set chart_caption = 'Траты по месяцам' %}
+        {% include "_months_chart.html" %}
     </section>
 
     <section class="panel" aria-labelledby="cats-title">
@@ -211,5 +195,43 @@
         <div class="empty-state">Нет данных за выбранный месяц.</div>
         {% endif %}
     </section>
+
+    {% if top_items %}
+    <section class="panel" aria-labelledby="top-items-title">
+        <div class="panel-head"><h2 id="top-items-title">Самые крупные покупки</h2></div>
+        <div class="top-list">
+            {% for it in top_items %}
+            <a class="top-row" href="/receipts/{{ it.receipt_id }}">
+                <span class="ico" style="--c: {{ it.category|cat_color }}" aria-hidden="true">{{ it.category|cat_emoji }}</span>
+                <div style="min-width:0">
+                    <div class="t">{{ it.description }}</div>
+                    <div class="m">{% if it.store_name %}{{ it.store_name }} · {% endif %}{{ it.day|human_date }}</div>
+                </div>
+                <span class="amt">{{ it.amount|money(it.currency) }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if top_places %}
+    <section class="panel" aria-labelledby="top-places-title">
+        <div class="panel-head"><h2 id="top-places-title">Где тратил больше всего</h2></div>
+        {% set place_max = top_places[0].amount %}
+        <div class="top-list">
+            {% for p in top_places %}
+            <div class="top-row">
+                <span class="ico place" aria-hidden="true">{{ p.name[:1]|upper }}</span>
+                <div style="min-width:0">
+                    <div class="t">{{ p.name }}</div>
+                    <div class="m">{{ plural(p.visits, 'чек', 'чека', 'чеков') }}</div>
+                    <div class="place-bar" aria-hidden="true"><span style="width: {{ (p.amount / place_max * 100) if place_max > 0 else 0 }}%"></span></div>
+                </div>
+                <span class="amt">{{ p.amount|money }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 </main>
 {% endblock %}

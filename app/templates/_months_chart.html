@@ -1,0 +1,49 @@
+{#
+  Column chart of monthly totals. Expects:
+    months        — dicts with key, short, name, total; optional top_category or count
+    ticks, axis_max — from stats.nice_ticks
+    selected      — month key to highlight and label, or none
+    link_base     — columns link to `link_base?month=key`, or none for plain columns
+    chart_caption — caption of the screen-reader table
+#}
+{% set grid_cols = 'grid-template-columns: repeat(' ~ months|length ~ ', minmax(0, 1fr))' %}
+<div class="chart">
+    <div class="y-axis" aria-hidden="true">
+        {% for t in ticks %}<span style="bottom: {{ t / axis_max * 100 }}%">{{ t|compact_number }}</span>{% endfor %}
+    </div>
+    <div class="plot">
+        {% for t in ticks %}<div class="gridline" style="bottom: {{ t / axis_max * 100 }}%"></div>{% endfor %}
+        <div class="cols" style="{{ grid_cols }}">
+            {% for m in months %}
+            {% set pct = m.total / axis_max * 100 %}
+            {% set tag = 'a' if link_base else 'div' %}
+            <{{ tag }} class="col {{ 'on' if m.key == selected else '' }}"
+               {% if link_base %}href="{{ link_base }}?month={{ m.key }}"{% else %}tabindex="0"{% endif %}
+               aria-label="{{ m.name }}: {{ m.total|money|striptags }}"{% if m.key == selected %} aria-current="page"{% endif %}>
+                <span class="bar" style="height: {{ pct }}%{% if m.total > 0 %}; min-height: 3px{% endif %}"></span>
+                {% if m.key == selected and m.total > 0 %}
+                <span class="cap" style="bottom: {{ pct }}%">{{ m.total|round|money }}</span>
+                {% endif %}
+                <span class="tip" aria-hidden="true" style="bottom: {{ [pct, 30]|max }}%">
+                    {{ m.name }}
+                    <b>{{ m.total|money }}</b>
+                    {% if m.top_category %}больше всего: {{ m.top_category|cat_emoji }} {{ m.top_category }}
+                    {% elif m.count %}{{ plural(m.count, 'покупка', 'покупки', 'покупок') }}{% endif %}
+                </span>
+            </{{ tag }}>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="x-axis" aria-hidden="true" style="{{ grid_cols }}">
+        {% for m in months %}<span class="{{ 'on' if m.key == selected else '' }}">{{ m.short }}</span>{% endfor %}
+    </div>
+</div>
+{# The same numbers as a table for screen readers. #}
+<table class="sr-only">
+    <caption>{{ chart_caption }}</caption>
+    <tbody>
+    {% for m in months %}
+        <tr><th scope="row">{{ m.name }}</th><td>{{ m.total|money }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>

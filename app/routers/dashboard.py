@@ -9,11 +9,14 @@ from app.models import LineItem, Receipt
 from app.stats import (
     effective_date,
     month_bounds,
-    month_summary,
+    month_forecast,
     month_nav,
+    month_summary,
     monthly_totals,
     nice_ticks,
     parse_month,
+    top_items,
+    top_places,
 )
 from app.templating import templates
 
@@ -66,6 +69,9 @@ def dashboard(
         {
             "month": f"{year:04d}-{mon:02d}",
             "summary": summary,
+            "forecast": month_forecast(db, year, mon, summary["total"]),
+            "top_items": top_items(db, start, end),
+            "top_places": top_places(db, start, end),
             "months": months,
             "ticks": ticks,
             "axis_max": ticks[-1] or 1,

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}{{ ('Поиск: ' ~ query) if query else 'Поиск' }}{% endblock %}
+{% block head %}
+<style>
+    .search-page { display: flex; flex-direction: column; gap: 14px; }
+    .panel { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px; }
+    .panel h2 { font-size: 15px; margin: 0 0 12px; }
+
+    .search-box { display: flex; gap: 8px; }
+    .search-page input[type=search] {
+        flex: 1; min-width: 0; font-size: 17px; padding: 14px 16px; border-radius: 16px;
+        border: 0; background: var(--surface); box-shadow: var(--shadow); color: var(--text);
+    }
+    .search-page input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+    .search-box .btn { border-radius: 16px; min-width: 56px; }
+    .search-box svg { width: 22px; height: 22px; }
+
+    .terms { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .term { background: var(--surface); border-radius: 99px; padding: 2px 10px; box-shadow: 0 0 0 1px var(--line); color: var(--text); }
+    .terms a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .terms a:hover { text-decoration: underline; }
+
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; }
+    .examples a {
+        background: var(--surface); border-radius: 99px; padding: 8px 14px; box-shadow: var(--shadow);
+        color: var(--text); text-decoration: none; font-weight: 500;
+    }
+    .examples a:hover { background: var(--surface-2); }
+    .hint { color: var(--muted); font-size: 14px; max-width: 60ch; margin: 0; }
+
+    .hero { font-size: 44px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; margin: 4px 0; }
+    .hero .cents { font-size: 26px; }
+    .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    .fact > span { display: block; font-size: 12px; color: var(--muted); }
+    .fact b { font-size: 16px; font-variant-numeric: tabular-nums; }
+    @media (max-width: 420px) { .facts { grid-template-columns: 1fr 1fr; } }
+
+    .places { display: flex; flex-wrap: wrap; gap: 8px; }
+    .place { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; font-size: 14px; }
+    .place b { font-variant-numeric: tabular-nums; }
+    .place > span { color: var(--muted); font-size: 12px; }
+
+    .results { display: flex; flex-direction: column; }
+    .result {
+        display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+        padding: 9px 8px; margin: 0 -8px; border-radius: 12px; text-decoration: none; color: inherit;
+    }
+    .result:hover { background: var(--surface-2); }
+    .result .ico {
+        width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 18px;
+        background: color-mix(in srgb, var(--c) 16%, var(--surface));
+    }
+    .result .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result .m { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result .amt { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .more { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="search-page">
+    <form class="search-box" method="get" action="/search" role="search">
+        <input type="search" name="q" value="{{ query }}" placeholder="Кофе, пиво, Lidl…"
+               aria-label="Что искать" autocomplete="off" {% if not query %}autofocus{% endif %}>
+        {% if exact %}<input type="hidden" name="exact" value="1">{% endif %}
+        <button type="submit" class="btn btn-primary" aria-label="Найти">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        </button>
+    </form>
+
+    {% if not query %}
+    <p class="hint">
+        Ищет по названиям позиций в чеках и по магазинам за последние {{ months_count }} месяцев.
+        Запрос можно писать по-русски: Claude добавит перевод и сокращения, как их печатают в чеках.
+    </p>
+    <div class="examples">
+        {% for example in ['кофе', 'пиво', 'хлеб', 'бензин', 'Lidl'] %}
+        <a href="/search?q={{ example|urlencode }}">{{ example }}</a>
+        {% endfor %}
+    </div>
+    {% else %}
+    {% set r = result %}
+
+    <div class="terms">
+        {% if exact %}
+        Точный поиск «{{ query }}». <a href="/search?q={{ query|urlencode }}">Искать с переводом</a>
+        {% elif expansion_failed %}
+        Перевод сейчас недоступен, ищу только «{{ query }}».
+        {% else %}
+        Ищу:
+        {% for t in terms %}<span class="term">{{ t }}</span>{% endfor %}
+        <a href="/search?q={{ query|urlencode }}&amp;exact=1">только «{{ query }}»</a>
+        {% endif %}
+    </div>
+
+    {% if r.count %}
+    <section class="panel" aria-label="Итог">
+        <span class="muted">За {{ months_count }} месяцев</span>
+        <div class="hero">{{ r.total|money }}</div>
+        <div class="facts">
+            <div class="fact"><span>Покупок</span><b>{{ r.count }}</b></div>
+            <div class="fact"><span>В месяц</span><b>{{ (r.per_month|round)|money }}</b></div>
+            <div class="fact"><span>Средняя покупка</span><b>{{ r.average_price|money }}</b></div>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="by-month-title">
+        <h2 id="by-month-title">По месяцам</h2>
+        {% set months = r.chart %}
+        {% set selected = none %}
+        {% set link_base = none %}
+        {% set chart_caption = 'Траты по месяцам: ' ~ query %}
+        {% include "_months_chart.html" %}
+    </section>
+
+    {% if r.places %}
+    <section class="panel" aria-labelledby="places-title">
+        <h2 id="places-title">Где покупаешь</h2>
+        <div class="places">
+            {% for p in r.places %}
+            <div class="place">{{ p.name }} <b>{{ p.amount|money }}</b> <span>· {{ plural(p.count, 'раз', 'раза', 'раз') }}</span></div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="panel" aria-labelledby="found-title">
+        <h2 id="found-title">Найденные позиции</h2>
+        <div class="results">
+            {% for m in r.listed %}
+            <a class="result" href="/receipts/{{ m.receipt_id }}#item-{{ m.item_id }}">
+                <span class="ico" style="--c: {{ m.category|cat_color }}" aria-hidden="true">{{ m.category|cat_emoji }}</span>
+                <div style="min-width:0">
+                    <div class="t">{{ m.description }}{% if m.quantity and m.quantity != 1 %} × {{ m.quantity|plain_amount }}{% endif %}</div>
+                    <div class="m">{% if m.store_name %}{{ m.store_name }} · {% endif %}{{ m.day|human_date }}{% if not exact and m.matched != query|lower %} · по «{{ m.matched }}»{% endif %}</div>
+                </div>
+                <span class="amt">{{ m.amount|money(m.currency) }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% if r.count > r.listed|length %}
+        <p class="more">Показаны последние {{ r.listed|length }} из {{ r.count }}. Итог и график учитывают все.</p>
+        {% endif %}
+    </section>
+    {% else %}
+    <div class="panel">
+        <p class="hint">
+            За {{ months_count }} месяцев ничего не нашлось.
+            {% if exact %}Попробуйте <a href="/search?q={{ query|urlencode }}">поиск с переводом</a>.{% else %}Попробуйте слово попроще или название магазина.{% endif %}
+        </p>
+    </div>
+    {% endif %}
+    {% endif %}
+</main>
+{% endblock %}

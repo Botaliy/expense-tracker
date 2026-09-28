@@ -31,6 +31,8 @@
             --c-home: #7048e8; --c-health: #e03131; --c-beauty: #d6336c; --c-clothes: #0c8599;
             --c-tech: #4263eb; --c-alco: #9c36b5; --c-fun: #f76707; --c-net: #1098ad;
             --c-other: #868e96;
+            --bar-muted: #c9d3ce;
+            --bar-hover: #a9b8b1;
 
             --font: "Onest", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
@@ -51,6 +53,8 @@
                 --danger-soft: #33190f;
                 --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .25);
                 --sheet-shadow: 0 -10px 40px rgba(0, 0, 0, .5);
+                --bar-muted: #34403b;
+                --bar-hover: #4a5852;
             }
         }
 
@@ -81,7 +85,7 @@
         }
         .tabbar nav {
             max-width: 640px; margin: 0 auto;
-            display: grid; grid-template-columns: 1fr 1fr auto; gap: 4px;
+            display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 4px;
             background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 5px;
         }
         .tabbar a, .tabbar button {
@@ -93,6 +97,9 @@
         .tabbar button:hover { color: var(--text); }
         .tabbar svg { width: 20px; height: 20px; flex: none; }
         .tabbar form { display: contents; }
+        @media (max-width: 420px) {
+            .tabbar a { flex-direction: column; gap: 2px; padding: 6px 4px; font-size: 11px; }
+        }
 
         /* ---------- shared components ---------- */
         .btn {
@@ -191,6 +198,52 @@
         .delta.down { color: var(--accent); }
         .delta.up { color: var(--danger); }
 
+        /* ---------- months chart (_months_chart.html): one series, selected month in the accent ---------- */
+        .chart { --plot-h: 180px; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
+        .y-axis { position: relative; height: var(--plot-h); min-width: 3.2em; }
+        .y-axis span {
+            position: absolute; right: 0; transform: translateY(50%);
+            font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+        }
+        .plot { position: relative; height: var(--plot-h); }
+        .gridline { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+        .cols { position: absolute; inset: 0; display: grid; }
+        .col {
+            position: relative; display: flex; justify-content: center; align-items: flex-end;
+            text-decoration: none; color: inherit; border-radius: 10px; outline-offset: 0;
+        }
+        .col:hover { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
+        .bar {
+            width: min(24px, 60%); border-radius: 4px 4px 0 0;
+            background: var(--bar-muted); transition: background .15s ease;
+        }
+        .col.on .bar { background: var(--accent); }
+        .col:hover .bar { background: var(--bar-hover); }
+        .col.on:hover .bar { background: var(--accent); }
+        .cap {
+            position: absolute; left: 50%; transform: translate(-50%, -6px);
+            font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
+        }
+        .tip {
+            position: absolute; left: 50%; transform: translate(-50%, -10px); z-index: 3;
+            background: var(--text); color: var(--bg); border-radius: 10px; padding: 8px 10px;
+            font-size: 12px; line-height: 1.35; white-space: nowrap; pointer-events: none;
+            opacity: 0; transition: opacity .12s ease;
+        }
+        .tip b { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
+        .tip .cents { color: inherit; opacity: .7; }
+        .col:first-child .tip { left: 0; transform: translate(0, -10px); }
+        .col:last-child .tip { left: auto; right: 0; transform: translate(0, -10px); }
+        .col:hover .tip, .col:focus-visible .tip { opacity: 1; }
+        .col:hover .cap, .col:focus-visible .cap { opacity: 0; }
+        .x-axis { grid-column: 2; display: grid; margin-top: 6px; }
+        .x-axis span { text-align: center; font-size: 12px; color: var(--muted); }
+        .x-axis span.on { color: var(--text); font-weight: 700; }
+        .sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+        }
+
         /* ---------- login ---------- */
         .login-shell { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
         .login-card { width: 100%; max-width: 360px; }
@@ -216,6 +269,10 @@
         <a href="/dashboard" class="{{ 'on' if request.url.path == '/dashboard' else '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
             Дашборд
+        </a>
+        <a href="/search" class="{{ 'on' if request.url.path == '/search' else '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+            Поиск
         </a>
         <form method="post" action="/logout">
             <button type="submit" title="Выйти ({{ logged_in }})" aria-label="Выйти">

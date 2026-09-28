@@ -8,7 +8,7 @@ from app.config import get_settings
 from app import database
 from app.database import init_db
 from app.receipts import fail_interrupted_receipts
-from app.routers import auth, dashboard, receipts
+from app.routers import auth, dashboard, receipts, search
 
 settings = get_settings()
 
@@ -29,3 +29,4 @@ app.mount("/uploads", StaticFiles(directory=str(settings.upload_path)), name="up
 app.include_router(auth.router)
 app.include_router(receipts.router)
 app.include_router(dashboard.router)
+app.include_router(search.router)

@@ -1,6 +1,7 @@
 import base64
 import io
 import mimetypes
+from functools import lru_cache
 from pathlib import Path
 
 from anthropic import Anthropic
@@ -209,3 +210,80 @@ def categorize_expense(description: str, amount: float | None = None) -> str:
         raise ExpenseCategorizationError("Model did not return a category")
 
     return normalize_category(tool_use_block.input.get("category"))
+
+
+SEARCH_TERMS_TOOL_NAME = "search_terms"
+
+SEARCH_TERMS_TOOL = {
+    "name": SEARCH_TERMS_TOOL_NAME,
+    "description": "Report substrings to look for in receipt line items.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "terms": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Lowercase substrings, most specific first.",
+            }
+        },
+        "required": ["terms"],
+    },
+}
+
+SEARCH_TERMS_PROMPT = (
+    "A person searches their own purchase history. Line items were read from "
+    "receipts printed in the shop's language (usually a European language: German, "
+    "French, Spanish, Italian, Dutch, English...) and are often abbreviated, e.g. "
+    "'KAFFEE CREMA 1KG', 'CAFE SOLO', 'CAPPUCC.'. The query may be in Russian. "
+    "Return up to 12 short lowercase substrings that would appear in matching line "
+    "items: translations into those languages, common product names and typical "
+    "receipt abbreviations. Each at least 3 characters; avoid substrings so generic "
+    "they would match unrelated products. Use the search_terms tool."
+)
+
+MIN_SEARCH_TERM_LENGTH = 3
+
+
+class SearchExpansionError(RuntimeError):
+    pass
+
+
+@lru_cache(maxsize=256)
+def _expand_cached(query: str) -> tuple[str, ...]:
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise SearchExpansionError("ANTHROPIC_API_KEY is not configured")
+
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    try:
+        response = client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=256,
+            tools=[SEARCH_TERMS_TOOL],
+            tool_choice={"type": "tool", "name": SEARCH_TERMS_TOOL_NAME},
+            messages=[{"role": "user", "content": f"{SEARCH_TERMS_PROMPT}\n\nQuery: {query}"}],
+        )
+    except Exception as exc:  # network/auth/rate-limit errors from the SDK
+        raise SearchExpansionError(f"Anthropic API call failed: {exc}") from exc
+
+    tool_use_block = next(
+        (block for block in response.content if block.type == "tool_use"), None
+    )
+    if tool_use_block is None:
+        raise SearchExpansionError("Model did not return search terms")
+    raw_terms = tool_use_block.input.get("terms") or []
+    return tuple(
+        term.strip().casefold()
+        for term in raw_terms
+        if isinstance(term, str) and len(term.strip()) >= MIN_SEARCH_TERM_LENGTH
+    )
+
+
+def expand_search_terms(query: str) -> list[str]:
+    """The query plus its translations/abbreviations, deduplicated, query first.
+
+    Cached per process, since people repeat the same few searches.
+    """
+    query = query.strip().casefold()
+    terms = [query, *_expand_cached(query)]
+    return list(dict.fromkeys(t for t in terms if t))

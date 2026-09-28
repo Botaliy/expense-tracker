@@ -97,3 +97,66 @@ def test_monthly_totals_and_ticks():
     assert nice_ticks(10805.4) == [0, 5000, 10000, 15000]
     assert nice_ticks(870) == [0, 250, 500, 750, 1000]
     assert [compact_number(t) for t in (0, 750, 2500, 20000)] == ["0", "750", "2,5\u00a0тыс", "20\u00a0тыс"]
+
+
+def test_forecast_projects_current_pace_against_three_month_average(logged_in_client):
+    import calendar
+    from datetime import date
+    from unittest.mock import patch
+
+    from app.database import SessionLocal
+    from app.stats import month_forecast
+
+    today = date(2026, 9, 10)
+    _add(logged_in_client, "300", "Продукты", date(2026, 9, 3))
+    for day in (date(2026, 6, 5), date(2026, 7, 5), date(2026, 8, 5)):
+        _add(logged_in_client, "600", "Продукты", day)
+
+    with patch("app.stats.date") as fake_date, SessionLocal() as db:
+        fake_date.today.return_value = today
+        fake_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        fc = month_forecast(db, 2026, 9, 300)
+        fake_date.today.return_value = date(2026, 9, 3)
+        early = month_forecast(db, 2026, 9, 300)
+        other_month = month_forecast(db, 2026, 8, 600)
+
+    assert fc["projected"] == 300 / 10 * calendar.monthrange(2026, 9)[1]  # 900
+    assert fc["average"] == 600
+    assert fc["months_averaged"] == 3
+    assert early is None  # too early in the month to extrapolate
+    assert other_month is None  # past months have no forecast
+
+
+def test_top_items_and_places(logged_in_client):
+    from datetime import date
+
+    from app.database import SessionLocal
+    from app.stats import month_bounds, top_items, top_places
+
+    for amount, store in (("80", "Lidl"), ("20", "LIDL "), ("300", "MediaMarkt"), ("5", "Café")):
+        logged_in_client.post(
+            "/expenses",
+            data={
+                "description": f"Покупка {amount}",
+                "amount": amount,
+                "category": "Прочее",
+                "purchase_date": date(2026, 9, 5).isoformat(),
+                "store_name": store,
+            },
+        )
+    start, end = month_bounds(2026, 9)
+    with SessionLocal() as db:
+        items = top_items(db, start, end, limit=2)
+        places = top_places(db, start, end)
+
+    assert [i["amount"] for i in items] == [300, 80]
+    assert [(p["name"].lower(), p["visits"], p["amount"]) for p in places] == [
+        ("mediamarkt", 1, 300),
+        ("lidl", 2, 100),  # different spelling, one place
+        ("café", 1, 5),
+    ]
+
+    page = logged_in_client.get("/dashboard", params={"month": "2026-09"}).text
+    assert "Самые крупные покупки" in page
+    assert "Где тратил больше всего" in page
+    assert "2 чека" in page

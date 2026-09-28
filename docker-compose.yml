@@ -1,6 +1,7 @@
 services:
   app:
     build: .
+    image: expense-tracker
     restart: unless-stopped
     env_file: .env
     volumes:
@@ -10,6 +11,18 @@ services:
       - "8000"
     # No "ports:" here on purpose — the app is reachable only inside the
     # docker network, via nginx. Nothing but nginx talks to it directly.
+
+  # Daily DB backup to Telegram (see app/backup.py). Same image as the app,
+  # different command: no extra image, no extra dependencies.
+  backup:
+    image: expense-tracker
+    restart: unless-stopped
+    depends_on:
+      - app
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.backup"]
 
   nginx:
     image: nginx:alpine

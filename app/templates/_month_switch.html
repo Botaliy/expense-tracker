@@ -1,0 +1,10 @@
+{# Month arrows; expects `nav` (from stats.month_nav), `summary` and `switch_base`. #}
+<div class="month-switch">
+    <a href="{{ switch_base }}?month={{ nav.prev }}" aria-label="Предыдущий месяц">‹</a>
+    <span>{{ summary.title }}</span>
+    {% if nav.next %}
+    <a href="{{ switch_base }}?month={{ nav.next }}" aria-label="Следующий месяц">›</a>
+    {% else %}
+    <span class="off" aria-hidden="true">›</span>
+    {% endif %}
+</div>

@@ -1,7 +1,13 @@
 import io
+import re
 from unittest.mock import patch
 
 from app.schemas import ExtractedLineItem, ExtractedReceipt
+
+
+def _receipt_id(resp) -> int:
+    """Uploads and manual expenses redirect to the feed, anchored at the new row."""
+    return int(re.search(r"#r-(\d+)$", resp.headers["location"]).group(1))
 
 
 def _fake_extraction():
@@ -27,13 +33,13 @@ def test_upload_receipt_creates_processed_record(logged_in_client):
             follow_redirects=False,
         )
     assert resp.status_code == 303
-    detail_url = resp.headers["location"]
+    detail_url = f"/receipts/{_receipt_id(resp)}"
 
     detail = logged_in_client.get(detail_url)
     assert detail.status_code == 200
     assert "Пятёрочка" in detail.text
     assert "Молоко" in detail.text
-    assert "processed" in detail.text
+    assert "распознано по фото" in detail.text
 
 
 def test_upload_receipt_handles_ai_failure(logged_in_client):
@@ -49,9 +55,9 @@ def test_upload_receipt_handles_ai_failure(logged_in_client):
             files={"file": ("receipt.jpg", fake_image, "image/jpeg")},
             follow_redirects=False,
         )
-    detail_url = resp.headers["location"]
+    detail_url = f"/receipts/{_receipt_id(resp)}"
     detail = logged_in_client.get(detail_url)
-    assert "failed" in detail.text
+    assert "не смог распознать" in detail.text
     assert "boom" in detail.text
 
 
@@ -63,7 +69,7 @@ def test_update_item_category(logged_in_client):
             files={"file": ("receipt.jpg", fake_image, "image/jpeg")},
             follow_redirects=False,
         )
-    receipt_id = resp.headers["location"].rsplit("/", 1)[-1]
+    receipt_id = _receipt_id(resp)
 
     detail = logged_in_client.get(f"/receipts/{receipt_id}")
     assert detail.status_code == 200
@@ -95,7 +101,7 @@ def test_update_all_items_category(logged_in_client):
             files={"file": ("receipt.jpg", fake_image, "image/jpeg")},
             follow_redirects=False,
         )
-    receipt_id = resp.headers["location"].rsplit("/", 1)[-1]
+    receipt_id = _receipt_id(resp)
 
     update_resp = logged_in_client.post(
         f"/receipts/{receipt_id}/category",
@@ -120,7 +126,7 @@ def test_update_receipt_store_and_date(logged_in_client):
             files={"file": ("receipt.jpg", fake_image, "image/jpeg")},
             follow_redirects=False,
         )
-    receipt_id = int(resp.headers["location"].rsplit("/", 1)[-1])
+    receipt_id = _receipt_id(resp)
 
     upd = logged_in_client.post(
         f"/receipts/{receipt_id}",
@@ -144,7 +150,7 @@ def test_update_item_description_and_amount_syncs_total(logged_in_client):
         data={"description": "Кофе", "amount": "150", "category": "Кафе/рестораны"},
         follow_redirects=False,
     )
-    receipt_id = int(resp.headers["location"].rsplit("/", 1)[-1])
+    receipt_id = _receipt_id(resp)
 
     from app.database import SessionLocal
     from app.models import Receipt
@@ -179,32 +185,15 @@ def test_add_manual_expense(logged_in_client):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    detail_url = resp.headers["location"]
+    detail_url = f"/receipts/{_receipt_id(resp)}"
 
     detail = logged_in_client.get(detail_url)
     assert detail.status_code == 200
     assert "Такси домой" in detail.text
-    assert "250.50" in detail.text
-    assert "processed" in detail.text
+    assert "250,50" in detail.text
+    assert "добавлено вручную" in detail.text
     # No receipt photo was attached, so no <img> should be rendered.
     assert "<img" not in detail.text
-
-
-def test_receipts_list_shows_categories(logged_in_client):
-    fake_image = io.BytesIO(b"fake-image-bytes")
-    with patch("app.receipts.extract_receipt_data", return_value=_fake_extraction()):
-        logged_in_client.post(
-            "/receipts",
-            files={"file": ("receipt.jpg", fake_image, "image/jpeg")},
-            follow_redirects=False,
-        )
-
-    listing = logged_in_client.get("/")
-    assert listing.status_code == 200
-    assert "Категория" in listing.text  # new column header
-    assert "badge-category" in listing.text
-    assert "Продукты" in listing.text
-    assert "Транспорт" in listing.text
 
 
 def test_add_manual_expense_auto_categorizes_when_blank(logged_in_client):
@@ -218,7 +207,7 @@ def test_add_manual_expense_auto_categorizes_when_blank(logged_in_client):
         )
     assert resp.status_code == 303
     mock_cat.assert_called_once()
-    detail = logged_in_client.get(resp.headers["location"])
+    detail = logged_in_client.get(f"/receipts/{_receipt_id(resp)}")
     assert "Транспорт" in detail.text
 
 
@@ -235,7 +224,7 @@ def test_add_manual_expense_falls_back_when_ai_unavailable(logged_in_client):
             follow_redirects=False,
         )
     assert resp.status_code == 303
-    detail = logged_in_client.get(resp.headers["location"])
+    detail = logged_in_client.get(f"/receipts/{_receipt_id(resp)}")
     assert "Прочее" in detail.text
 
 
@@ -277,6 +266,132 @@ def test_add_manual_expense_rejects_unknown_category(logged_in_client):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    detail = logged_in_client.get(resp.headers["location"])
+    detail = logged_in_client.get(f"/receipts/{_receipt_id(resp)}")
     # Falls back to the default category instead of failing.
     assert "Прочее" in detail.text
+
+
+def test_upload_adds_discount_line_when_total_is_lower(logged_in_client):
+    extraction = _fake_extraction().model_copy(update={"total_amount": 320.0})
+    with patch("app.receipts.extract_receipt_data", return_value=extraction):
+        resp = logged_in_client.post(
+            "/receipts",
+            files={"file": ("receipt.jpg", io.BytesIO(b"x"), "image/jpeg")},
+            follow_redirects=False,
+        )
+    receipt_id = _receipt_id(resp)
+
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    with SessionLocal() as db:
+        receipt = db.get(Receipt, receipt_id)
+        discount = receipt.items[-1]
+        assert discount.description == "Скидка"
+        assert discount.amount == -30.0
+        assert discount.category == "Транспорт"  # category of the largest item
+        assert receipt.total_amount == 320.0
+
+
+def test_upload_without_total_uses_items_sum(logged_in_client):
+    extraction = _fake_extraction().model_copy(update={"total_amount": None})
+    with patch("app.receipts.extract_receipt_data", return_value=extraction):
+        resp = logged_in_client.post(
+            "/receipts",
+            files={"file": ("receipt.jpg", io.BytesIO(b"x"), "image/jpeg")},
+            follow_redirects=False,
+        )
+    receipt_id = _receipt_id(resp)
+
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    with SessionLocal() as db:
+        receipt = db.get(Receipt, receipt_id)
+        assert len(receipt.items) == 3
+        assert receipt.total_amount == 350.0
+
+
+def _upload(client, extraction=None, error=None):
+    from app.ai_client import ReceiptExtractionError
+
+    kwargs = {"return_value": extraction} if extraction else {"side_effect": ReceiptExtractionError(error or "x")}
+    with patch("app.receipts.extract_receipt_data", **kwargs):
+        resp = client.post(
+            "/receipts",
+            files={"file": ("receipt.jpg", io.BytesIO(b"x"), "image/jpeg")},
+            follow_redirects=False,
+        )
+    return _receipt_id(resp)
+
+
+def test_add_item_fills_failed_receipt(logged_in_client):
+    receipt_id = _upload(logged_in_client, error="unreadable")
+
+    resp = logged_in_client.post(
+        f"/receipts/{receipt_id}/items",
+        data={"description": "Продукты", "amount": "1 234,50", "category": "Продукты"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    from app.database import SessionLocal
+    from app.models import Receipt, ReceiptStatus
+
+    with SessionLocal() as db:
+        receipt = db.get(Receipt, receipt_id)
+        assert receipt.status == ReceiptStatus.PROCESSED
+        assert receipt.error_message is None
+        assert receipt.total_amount == 1234.5
+        assert resp.headers["location"] == f"/receipts/{receipt_id}#item-{receipt.items[0].id}"
+
+
+def test_delete_item_updates_total(logged_in_client):
+    receipt_id = _upload(logged_in_client, _fake_extraction())
+
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    with SessionLocal() as db:
+        item_id = db.get(Receipt, receipt_id).items[-1].id  # Такси, 200
+
+    resp = logged_in_client.post(f"/receipts/{receipt_id}/items/{item_id}/delete", follow_redirects=False)
+    assert resp.status_code == 303
+
+    with SessionLocal() as db:
+        receipt = db.get(Receipt, receipt_id)
+        assert [i.description for i in receipt.items] == ["Молоко", "Хлеб"]
+        assert receipt.total_amount == 150
+
+
+def test_update_item_accepts_comma_and_unicode_minus(logged_in_client):
+    receipt_id = _upload(logged_in_client, _fake_extraction())
+
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    with SessionLocal() as db:
+        item_id = db.get(Receipt, receipt_id).items[0].id
+
+    logged_in_client.post(
+        f"/receipts/{receipt_id}/items/{item_id}",
+        data={"category": "Продукты", "amount": "−10,50", "quantity": "2,5"},
+    )
+    with SessionLocal() as db:
+        item = db.get(Receipt, receipt_id).items[0]
+        assert item.amount == -10.5
+        assert item.quantity == 2.5
+
+
+def test_delete_receipt_returns_to_its_month(logged_in_client):
+    receipt_id = _upload(logged_in_client, _fake_extraction())  # dated 2026-08-10
+    resp = logged_in_client.post(f"/receipts/{receipt_id}/delete", follow_redirects=False)
+    assert resp.headers["location"] == "/?month=2026-08"
+
+
+def test_detail_page_shows_category_split(logged_in_client):
+    receipt_id = _upload(logged_in_client, _fake_extraction())
+    page = logged_in_client.get(f"/receipts/{receipt_id}").text
+    assert "3 позиции" in page
+    assert "150 ₽" in page  # Продукты: 90 + 60
+    assert 'href="/?month=2026-08#r-' in page

@@ -2,188 +2,150 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d1210" media="(prefers-color-scheme: dark)">
     <title>{% block title %}Траты{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <style>
         :root {
-            --bg: #f4f5f7;
+            --bg: #eef0ec;
             --surface: #ffffff;
-            --surface-2: #f9fafb;
-            --border: #e5e7eb;
-            --text: #111827;
-            --text-muted: #6b7280;
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
-            --primary-soft: #eef2ff;
-            --danger: #ef4444;
-            --danger-soft: #fef2f2;
-            --success: #16a34a;
-            --success-soft: #f0fdf4;
-            --warning: #d97706;
-            --warning-soft: #fffbeb;
-            --radius: 14px;
-            --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+            --surface-2: #f5f6f3;
+            --line: #e2e5df;
+            --text: #17201b;
+            --muted: #6b746e;
+            --accent: #0e7c66;
+            --accent-ink: #ffffff;
+            --accent-soft: #dff1eb;
+            --danger: #c2410c;
+            --danger-soft: #fdeee6;
+            --shadow: 0 1px 2px rgba(23, 32, 27, .05), 0 6px 20px rgba(23, 32, 27, .06);
+            --sheet-shadow: 0 -10px 40px rgba(23, 32, 27, .18);
+            --radius: 20px;
+
+            --c-food: #2f9e44; --c-cafe: #e8590c; --c-transport: #f0a500; --c-auto: #1c7ed6;
+            --c-home: #7048e8; --c-health: #e03131; --c-beauty: #d6336c; --c-clothes: #0c8599;
+            --c-tech: #4263eb; --c-alco: #9c36b5; --c-fun: #f76707; --c-net: #1098ad;
+            --c-other: #868e96;
+
+            --font: "Onest", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
-                --bg: #0f1115;
-                --surface: #171923;
-                --surface-2: #1c1f2a;
-                --border: #2a2e3a;
-                --text: #f3f4f6;
-                --text-muted: #9ca3af;
-                --primary: #818cf8;
-                --primary-hover: #a5b4fc;
-                --primary-soft: #1e1b3a;
-                --danger: #f87171;
-                --danger-soft: #2a1616;
-                --success: #4ade80;
-                --success-soft: #12261a;
-                --warning: #fbbf24;
-                --warning-soft: #2a2113;
-                --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
+                color-scheme: dark;
+                --bg: #0d1210;
+                --surface: #161d1a;
+                --surface-2: #1c2521;
+                --line: #26302b;
+                --text: #e8ece9;
+                --muted: #8f9a94;
+                --accent: #34c79f;
+                --accent-ink: #062019;
+                --accent-soft: #143329;
+                --danger: #fb8c5a;
+                --danger-soft: #33190f;
+                --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .25);
+                --sheet-shadow: 0 -10px 40px rgba(0, 0, 0, .5);
             }
         }
 
         * { box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
             background: var(--bg);
             color: var(--text);
-            margin: 0;
-            padding: 0 1.25rem 3rem;
-            line-height: 1.5;
+            font: 15px/1.45 var(--font);
+            -webkit-font-smoothing: antialiased;
+            padding: env(safe-area-inset-top, 0px) 16px 0;
         }
+        body.with-tabbar { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 
-        .page {
-            max-width: 880px;
-            margin: 0 auto;
+        .page { max-width: 640px; margin: 0 auto; padding-top: 20px; }
+
+        .num, .money, td { font-variant-numeric: tabular-nums; }
+        .kop { color: var(--muted); font-weight: inherit; }
+        button, input, select, textarea { font: inherit; color: inherit; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        /* ---------- bottom navigation ---------- */
+        .tabbar {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+            background: linear-gradient(to top, var(--bg) 70%, transparent);
         }
-
-        header.topbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.5rem 0 1rem;
+        .tabbar nav {
+            max-width: 640px; margin: 0 auto;
+            display: grid; grid-template-columns: 1fr 1fr auto; gap: 4px;
+            background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 5px;
         }
-
-        .brand {
-            font-weight: 700;
-            font-size: 1.15rem;
-            text-decoration: none;
-            color: var(--text);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+        .tabbar a, .tabbar button {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 10px; border-radius: 14px; border: 0; background: none; cursor: pointer;
+            text-decoration: none; color: var(--muted); font-weight: 600; font-size: 14px;
         }
+        .tabbar a.on { background: var(--accent-soft); color: var(--accent); }
+        .tabbar button:hover { color: var(--text); }
+        .tabbar svg { width: 20px; height: 20px; flex: none; }
+        .tabbar form { display: contents; }
 
-        .brand .dot {
-            width: 10px; height: 10px; border-radius: 50%;
-            background: var(--primary);
-            display: inline-block;
-        }
-
-        nav.tabs {
-            display: flex;
-            gap: 0.25rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 0.25rem;
-            box-shadow: var(--shadow);
-        }
-
-        nav.tabs a {
-            text-decoration: none;
-            color: var(--text-muted);
-            padding: 0.4rem 0.9rem;
-            border-radius: 999px;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        nav.tabs a.active {
-            background: var(--primary);
-            color: white;
-        }
-
-        .user-menu {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
+        /* ---------- shared components ---------- */
         .btn {
-            font-family: inherit;
-            font-size: 0.9rem;
-            font-weight: 600;
-            border-radius: 10px;
-            padding: 0.55rem 1rem;
-            border: 1px solid transparent;
-            cursor: pointer;
-            transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
+            font-weight: 600; font-size: 0.95rem;
+            border-radius: 14px; padding: 0.6rem 1rem; border: 1px solid transparent; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            text-decoration: none;
+            transition: transform .08s ease, filter .15s ease, background .15s ease;
         }
-
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-
-        .btn-secondary {
-            background: var(--surface);
-            color: var(--text);
-            border-color: var(--border);
-        }
+        .btn:active { transform: scale(.98); }
+        .btn:disabled { opacity: .6; cursor: default; }
+        .btn-primary { background: var(--accent); color: var(--accent-ink); }
+        .btn-primary:hover { filter: brightness(1.06); }
+        .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--line); }
         .btn-secondary:hover { background: var(--surface-2); }
-
-        .btn-danger { background: transparent; color: var(--danger); border-color: var(--border); }
+        .btn-danger { background: transparent; color: var(--danger); border-color: var(--line); }
         .btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
-
-        .btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
+        .btn-ghost { background: transparent; color: var(--muted); }
         .btn-ghost:hover { color: var(--text); }
-
-        .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.82rem; border-radius: 10px; }
 
         .card {
             background: var(--surface);
-            border: 1px solid var(--border);
             border-radius: var(--radius);
             box-shadow: var(--shadow);
-            padding: 1.25rem;
-            margin-bottom: 1.25rem;
+            padding: 1.1rem;
+            margin-bottom: 1rem;
         }
 
-        h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+        h1 { font-size: 1.6rem; line-height: 1.2; letter-spacing: -.01em; margin: 0 0 1rem; text-wrap: balance; }
         h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
 
         label {
             display: block;
-            font-size: 0.82rem;
+            font-size: 0.75rem;
             font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 0.3rem;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 0.35rem;
         }
 
         input[type=text], input[type=password], input[type=number],
         input[type=date], input[type=month], input[type=file], select, textarea {
             width: 100%;
-            font-family: inherit;
             font-size: 0.95rem;
-            padding: 0.55rem 0.7rem;
-            border-radius: 10px;
-            border: 1px solid var(--border);
+            padding: 0.6rem 0.75rem;
+            border-radius: 12px;
+            border: 1px solid var(--line);
             background: var(--surface-2);
             color: var(--text);
         }
-
-        input:focus, select:focus, textarea:focus {
-            outline: 2px solid var(--primary);
-            outline-offset: 1px;
-        }
+        input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 
         .field { margin-bottom: 0.85rem; }
         .field-row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
@@ -192,142 +154,84 @@
         table { width: 100%; border-collapse: collapse; }
         th {
             text-align: left;
-            font-size: 0.78rem;
+            font-size: 0.72rem;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
-            color: var(--text-muted);
-            padding: 0.5rem 0.6rem;
-            border-bottom: 1px solid var(--border);
+            letter-spacing: 0.04em;
+            color: var(--muted);
+            padding: 0.7rem 0.6rem;
+            border-bottom: 1px solid var(--line);
         }
-        td { padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--border); }
+        td { padding: 0.6rem; border-bottom: 1px solid var(--line); }
         tr:last-child td { border-bottom: none; }
-        tbody tr.row-link { cursor: pointer; transition: background 0.1s ease; }
-        tbody tr.row-link:hover { background: var(--surface-2); }
 
-        .badge {
-            display: inline-block;
-            padding: 0.2rem 0.6rem;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .badge-pending { background: var(--warning-soft); color: var(--warning); }
-        .badge-processed { background: var(--success-soft); color: var(--success); }
-        .badge-failed { background: var(--danger-soft); color: var(--danger); }
-        .badge-category { background: var(--primary-soft); color: var(--primary-hover); }
 
-        .empty-state {
-            text-align: center;
-            color: var(--text-muted);
-            padding: 2.5rem 1rem;
-        }
+        .empty-state { text-align: center; color: var(--muted); padding: 2.5rem 1rem; }
 
         .error {
             color: var(--danger);
             background: var(--danger-soft);
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 0.6rem 0.9rem;
             font-size: 0.9rem;
-            margin-bottom: 1rem;
+            margin: 0 0 1rem;
         }
 
-        .muted { color: var(--text-muted); font-size: 0.85rem; }
+        .muted { color: var(--muted); font-size: 0.85rem; }
 
-        /* CSS-only tabs (radio-driven) */
-        .tabset input[type=radio] { display: none; }
-        .tabset .tab-labels { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .tabset .tab-labels label {
-            cursor: pointer;
-            margin: 0;
-            padding: 0.5rem 1rem;
-            border-radius: 10px;
-            background: var(--surface-2);
-            color: var(--text-muted);
-            font-weight: 600;
-            font-size: 0.85rem;
+        /* ---------- month header (home + dashboard) ---------- */
+        .month-switch { display: flex; align-items: center; gap: 2px; font-weight: 600; }
+        .month-switch a, .month-switch span.off {
+            width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+            color: var(--muted); font-size: 20px; text-decoration: none;
         }
-        .tabset .tab-panel { display: none; }
-        #tab-upload:checked ~ .tab-labels label[for=tab-upload],
-        #tab-manual:checked ~ .tab-labels label[for=tab-manual] {
-            background: var(--primary);
-            color: white;
-        }
-        #tab-upload:checked ~ #panel-upload,
-        #tab-manual:checked ~ #panel-manual {
-            display: block;
-        }
+        .month-switch a:hover { background: var(--surface-2); color: var(--text); }
+        .month-switch span.off { opacity: .3; }
+        /* Spending going up is the bad direction. */
+        .delta { font-size: 13px; font-weight: 600; white-space: nowrap; }
+        .delta.down { color: var(--accent); }
+        .delta.up { color: var(--danger); }
 
-        .cat-list { display: flex; flex-direction: column; }
-        .cat-item { border-bottom: 1px solid var(--border); padding: 0.9rem 1.25rem; }
-        .cat-item:last-child { border-bottom: none; }
-        .cat-item summary {
-            cursor: pointer;
-            list-style: none;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .cat-item summary::-webkit-details-marker { display: none; }
-        .cat-item summary::before {
-            content: '\203A';
-            color: var(--text-muted);
-            font-weight: 700;
-            transition: transform 0.15s ease;
-        }
-        .cat-item[open] summary::before { transform: rotate(90deg); }
-        .cat-item .cat-bar {
-            flex: 1;
-            background: var(--surface-2);
-            border-radius: 999px;
-            overflow: hidden;
-            height: 8px;
-        }
-        .cat-item .cat-bar > div { background: var(--primary); height: 100%; }
-        .cat-item .cat-amount { font-weight: 600; min-width: 5.5rem; text-align: right; }
-        .cat-items-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
-        .cat-items-table td { padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
-        .cat-items-table tr:last-child td { border-bottom: none; }
-
-        .login-shell {
-            min-height: 70vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        /* ---------- login ---------- */
+        .login-shell { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
         .login-card { width: 100%; max-width: 360px; }
 
-        .center-form { max-width: 420px; margin: 0 auto; }
-
-        @media (max-width: 560px) {
-            header.topbar { flex-direction: column; align-items: stretch; gap: 0.75rem; }
-            .field-row { flex-direction: column; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
+    {% block head %}{% endblock %}
 </head>
-<body>
+{% set logged_in = request.session.get('user') %}
+<body class="{{ 'with-tabbar' if logged_in else '' }}">
 <div class="page">
-    {% if request.session.get('user') %}
-    <header class="topbar">
-        <a class="brand" href="/"><span class="dot"></span>Траты</a>
-        <nav class="tabs">
-            <a href="/" class="{{ 'active' if request.url.path == '/' else '' }}">Чеки</a>
-            <a href="/dashboard" class="{{ 'active' if request.url.path == '/dashboard' else '' }}">Дашборд</a>
-        </nav>
-        <div class="user-menu">
-            <span class="muted">{{ request.session.get('user') }}</span>
-            <form method="post" action="/logout">
-                <button type="submit" class="btn btn-ghost btn-sm">Выйти</button>
-            </form>
-        </div>
-    </header>
-    {% endif %}
     {% block content %}{% endblock %}
 </div>
+{% if logged_in %}
+<div class="tabbar">
+    <nav>
+        <a href="/" class="{{ 'on' if request.url.path == '/' else '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+            Траты
+        </a>
+        <a href="/dashboard" class="{{ 'on' if request.url.path == '/dashboard' else '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
+            Дашборд
+        </a>
+        <form method="post" action="/logout">
+            <button type="submit" title="Выйти ({{ logged_in }})" aria-label="Выйти">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3"/><path d="M10 16l4-4-4-4M14 12H4"/></svg>
+            </button>
+        </form>
+    </nav>
+</div>
+{% endif %}
 <script>
     // Prevent double-submit (e.g. clicking a submit button twice while the
     // request is in flight), which would otherwise create duplicate records.
     document.addEventListener('submit', function (e) {
         var form = e.target;
+        // Cancelled (e.g. "no" in a confirm()) or handled by htmx: not a page submit.
+        if (form.dataset.submitted !== '1' && e.defaultPrevented) return;
         if (form.dataset.submitted === '1') {
             e.preventDefault();
             return;
@@ -335,6 +239,15 @@
         form.dataset.submitted = '1';
         form.querySelectorAll('button[type=submit], button:not([type])').forEach(function (btn) {
             btn.disabled = true;
+        });
+    });
+    // Coming back via the browser's back button restores the page from cache
+    // with its buttons still disabled.
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) return;
+        document.querySelectorAll('form[data-submitted]').forEach(function (form) {
+            delete form.dataset.submitted;
+            form.querySelectorAll('button').forEach(function (btn) { btn.disabled = false; });
         });
     });
 </script>

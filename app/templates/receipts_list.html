@@ -1,145 +1,356 @@
 {% extends "base.html" %}
-{% block title %}Чеки{% endblock %}
+{% block title %}Траты{% endblock %}
+{% block head %}
+<style>
+    .home { display: flex; flex-direction: column; gap: 14px; }
+
+    .summary { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px 18px 16px; }
+    .summary-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .total { font-size: 40px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin: 6px 0 2px; }
+    .total .kop { font-size: 24px; }
+    .summary .sub { color: var(--muted); font-size: 13px; }
+    .catbar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; gap: 2px; margin: 14px 0 10px; background: var(--surface-2); }
+    .catbar span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+    .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+    .legend b { color: var(--text); font-weight: 600; }
+
+    .actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+    .actions .btn { min-height: 56px; font-size: 16px; border-radius: 16px; padding: 0 18px; border: 0; }
+    .actions .btn-secondary { box-shadow: var(--shadow); }
+    .actions svg { width: 22px; height: 22px; flex: none; }
+    .actions .btn[aria-busy="true"] { opacity: .7; pointer-events: none; }
+    /* The upload button is a <label> for the hidden file input: undo label styling. */
+    .actions label.btn { width: 100%; margin: 0; text-transform: none; letter-spacing: 0; color: var(--accent-ink); font-weight: 600; }
+
+    .feed { display: flex; flex-direction: column; gap: 18px; }
+    .day-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 6px 8px; font-size: 13px; }
+    .day-head .d { font-weight: 700; }
+    .day-head .d span { color: var(--muted); font-weight: 500; margin-left: 6px; }
+    .day-head .s { color: var(--muted); font-weight: 600; }
+    .day-list { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); overflow: hidden; }
+
+    .row {
+        display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+        padding: 12px 14px; color: inherit; text-decoration: none; position: relative;
+        scroll-margin: 90px 0 110px;
+    }
+    .row + .row { border-top: 1px solid var(--line); }
+    a.row:hover, .row:has(a.row-cover:hover) { background: var(--surface-2); }
+    .row-cover { position: absolute; inset: 0; }
+    .row:target { animation: flash 1.6s ease; }
+    @keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
+
+    .ico {
+        width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 20px;
+        background: color-mix(in srgb, var(--c) 16%, var(--surface)); position: relative;
+    }
+    .ico img { width: 100%; height: 100%; object-fit: cover; border-radius: 13px; opacity: .45; }
+    .ico .stack {
+        position: absolute; right: -3px; bottom: -3px; width: 19px; height: 19px; border-radius: 6px; font-size: 11px;
+        display: grid; place-items: center; background: var(--surface); box-shadow: 0 0 0 2px var(--surface);
+    }
+    .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .meta { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .amt { font-weight: 700; text-align: right; white-space: nowrap; }
+
+    .row.failed .ico { background: var(--danger-soft); color: var(--danger); font-weight: 800; }
+    .row.failed .meta { color: var(--danger); }
+    .row.failed form { position: relative; z-index: 1; }
+    .row.pending .title, .row.pending .meta { color: var(--muted); }
+    .spin {
+        position: absolute; width: 18px; height: 18px; border-radius: 50%;
+        border: 2px solid var(--line); border-top-color: var(--accent); animation: rot .8s linear infinite;
+    }
+    .shimmer {
+        display: inline-block; height: 12px; width: 64px; border-radius: 6px;
+        background: linear-gradient(90deg, var(--surface-2), var(--line), var(--surface-2)); background-size: 200% 100%;
+        animation: sh 1.2s linear infinite;
+    }
+    @keyframes sh { to { background-position: -200% 0; } }
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    .feed .empty-state { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); }
+
+    /* ---------- manual-entry sheet ---------- */
+    dialog.sheet {
+        margin: auto auto 0; width: min(480px, 100%); max-width: 100%; max-height: 92dvh;
+        border: 0; padding: 0;
+        background: var(--surface); color: var(--text);
+        border-radius: 24px 24px 0 0; box-shadow: var(--sheet-shadow);
+    }
+    dialog.sheet[open] { animation: up .22s ease-out; }
+    dialog.sheet::backdrop { background: rgba(10, 14, 12, .45); }
+    @keyframes up { from { transform: translateY(30px); opacity: 0; } }
+    .sheet form { padding: 10px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
+    .grab { width: 40px; height: 4px; border-radius: 4px; background: var(--line); margin: 0 auto 12px; }
+    .sheet h2 { font-size: 18px; margin: 0 0 10px; }
+    .amount-field {
+        display: flex; align-items: baseline; gap: 6px; margin-bottom: 14px;
+        border-bottom: 2px solid var(--line); padding: 4px 0 6px;
+    }
+    .amount-field:focus-within { border-color: var(--accent); }
+    .amount-field input {
+        border: 0; background: none; outline: none; padding: 0; width: 100%; min-width: 0;
+        font: 800 38px/1.1 var(--font); font-variant-numeric: tabular-nums;
+    }
+    .amount-field span { font-size: 26px; font-weight: 700; color: var(--muted); }
+    .sheet input[type=text], .sheet input[type=date] { margin-bottom: 14px; padding: 12px; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
+    .chips.wrap { flex-wrap: wrap; overflow: visible; }
+    .chip { flex: none; position: relative; margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; }
+    .chip input { position: absolute; opacity: 0; pointer-events: none; }
+    .chip span {
+        display: block; border: 1px solid var(--line); background: var(--surface); border-radius: 99px;
+        padding: 7px 12px; white-space: nowrap;
+    }
+    .chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .ai-hint { font-size: 13px; color: var(--muted); margin: -8px 0 14px; min-height: 18px; }
+    .sheet .btn-primary { width: 100%; min-height: 52px; font-size: 16px; }
+</style>
+{% endblock %}
 {% block content %}
-<h1>Траты</h1>
+{% set s = summary %}
+<main class="home" id="home"
+      {% if has_pending %}hx-get="{{ request.url.path }}?{{ request.url.query }}" hx-trigger="every 2s" hx-select="#home" hx-swap="outerHTML"{% endif %}>
 
-<div class="card tabset">
-    <input type="radio" name="add-tab" id="tab-upload" checked>
-    <input type="radio" name="add-tab" id="tab-manual">
-    <div class="tab-labels">
-        <label for="tab-upload">📷 Загрузить чек</label>
-        <label for="tab-manual">✏️ Добавить вручную</label>
+    <section class="summary" aria-label="Итог за месяц">
+        <div class="summary-top">
+            {% set switch_base = '/' %}
+            {% include "_month_switch.html" %}
+            {% if s.delta_pct is not none %}
+            <span class="delta {{ 'down' if s.delta_pct <= 0 else 'up' }}">
+                {{ '↓' if s.delta_pct <= 0 else '↑' }} {{ s.delta_pct|abs }}% к {{ s.prev_month_dative }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="total num">{{ s.total|money }}</div>
+        <div class="sub">
+            {% if s.total %}≈ {{ (s.per_day|round)|money }} в день{% else %}Пока ничего не потрачено{% endif %}
+            {%- if s.is_current %} · на {{ s.today.day }} {{ s.month_genitive }}{% endif %}
+        </div>
+        {% if s.by_category and s.total > 0 %}
+        {# Top four plus "the rest": more hues than that can't be told apart, and
+           every segment shown must also be named in the legend. #}
+        {% set top = s.by_category[:4] %}
+        {% set rest = s.by_category[4:]|sum(attribute=1) %}
+        <div class="catbar" aria-hidden="true">
+            {% for cat, amount in top if amount > 0 %}
+            <span style="flex-grow: {{ amount }}; background: {{ cat|cat_color }}"></span>
+            {% endfor %}
+            {% if rest > 0 %}<span style="flex-grow: {{ rest }}; background: var(--muted)"></span>{% endif %}
+        </div>
+        <div class="legend">
+            {% for cat, amount in top %}
+            <span><i style="background: {{ cat|cat_color }}"></i>{{ cat }} <b class="num">{{ amount|money }}</b></span>
+            {% endfor %}
+            {% if rest %}
+            <span><i style="background: var(--muted)"></i>Остальное <b class="num">{{ rest|money }}</b></span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+
+    <div class="actions">
+        <form method="post" action="/receipts" enctype="multipart/form-data" id="upload-form">
+            {# No `capture` attribute: phones then offer both the camera and the gallery. #}
+            <input type="file" id="receipt-file" name="file" accept="image/*" required hidden>
+            <label for="receipt-file" class="btn btn-primary" id="upload-btn" role="button" tabindex="0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                <span>Сфотографировать чек</span>
+            </label>
+        </form>
+        <button type="button" class="btn btn-secondary" id="manual-open" aria-label="Добавить трату вручную" title="Добавить вручную">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
     </div>
 
-    <div class="tab-panel" id="panel-upload">
-        <form method="post" action="/receipts" enctype="multipart/form-data">
-            <input type="file" id="receipt-file" name="file" accept="image/*" required style="display:none">
-            <div class="field-row">
-                <button type="button" class="btn btn-secondary" onclick="pickReceiptFile(true)">📷 Сделать фото</button>
-                <button type="button" class="btn btn-secondary" onclick="pickReceiptFile(false)">🖼️ Из галереи</button>
+    <div class="feed">
+        {% for d in days %}
+        <section>
+            <div class="day-head">
+                <span class="d">{{ d.day|human_date }}{% if d.day|human_date != d.day|short_date %}<span>{{ d.day|short_date }}</span>{% endif %}</span>
+                <span class="s num">{{ d.total|money }}</span>
             </div>
-            <p class="muted" id="receipt-file-name">Файл не выбран</p>
-            <button type="submit" class="btn btn-primary">Распознать и добавить</button>
-        </form>
-        <script>
-            function pickReceiptFile(useCamera) {
-                const input = document.getElementById('receipt-file');
-                if (useCamera) {
-                    input.setAttribute('capture', 'environment');
+            <div class="day-list">
+            {% for e in d.entries %}
+                {% set r = e.receipt %}
+                {% if r.status.value == 'pending' %}
+                <a class="row pending" id="r-{{ r.id }}" href="/receipts/{{ r.id }}">
+                    <div class="ico" style="--c: var(--c-other)">
+                        {% if r.image_path %}<img src="/uploads/{{ r.image_path }}" alt="">{% endif %}
+                        <span class="spin"></span>
+                    </div>
+                    <div style="min-width:0"><div class="title">Распознаю чек…</div><div class="meta">Claude читает позиции</div></div>
+                    <span class="shimmer"></span>
+                </a>
+                {% elif r.status.value == 'failed' %}
+                <div class="row failed" id="r-{{ r.id }}">
+                    <a class="row-cover" href="/receipts/{{ r.id }}" aria-label="Открыть чек #{{ r.id }}"></a>
+                    <div class="ico">!</div>
+                    <div style="min-width:0"><div class="title">Чек не распознан</div><div class="meta">Откройте, чтобы заполнить вручную</div></div>
+                    <form method="post" action="/receipts/{{ r.id }}/retry">
+                        <input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}#r-{{ r.id }}">
+                        <button type="submit" class="btn btn-secondary btn-sm">Повторить</button>
+                    </form>
+                </div>
+                {% else %}
+                {% set main_cat = e.categories[0] if e.categories else 'Прочее' %}
+                <a class="row" id="r-{{ r.id }}" href="/receipts/{{ r.id }}">
+                    <div class="ico" style="--c: {{ main_cat|cat_color }}">
+                        {{ main_cat|cat_emoji }}
+                        {% if e.categories|length > 1 %}<span class="stack">{{ e.categories[1]|cat_emoji }}</span>{% endif %}
+                    </div>
+                    <div style="min-width:0">
+                        <div class="title">{{ e.title }}</div>
+                        <div class="meta">
+                            {{ e.categories|join(', ') or 'Без позиций' }} ·
+                            {% if e.is_manual %}{{ e.first_description if r.store_name else 'вручную' }}{% else %}{{ plural(e.item_count, 'позиция', 'позиции', 'позиций') }}{% endif %}
+                        </div>
+                    </div>
+                    <span class="amt">{{ e.amount|money(r.currency) }}</span>
+                </a>
+                {% endif %}
+            {% endfor %}
+            </div>
+        </section>
+        {% else %}
+        <div class="empty-state">В этом месяце трат нет. Сфотографируй чек или нажми «+».</div>
+        {% endfor %}
+    </div>
+</main>
+
+<dialog class="sheet" id="manual-sheet" aria-labelledby="manual-title">
+    <form method="post" action="/expenses" id="manual-form">
+        <div class="grab"></div>
+        <h2 id="manual-title">Новая трата</h2>
+        <div class="amount-field">
+            <input name="amount" id="m-amount" inputmode="decimal" autocomplete="off" placeholder="0"
+                   required pattern="\s*\d[\d\s]*([.,]\d{1,2})?\s*" aria-label="Сумма, ₽"
+                   title="Например, 450 или 199,90">
+            <span>₽</span>
+        </div>
+
+        <label for="m-desc">На что</label>
+        <input type="text" name="description" id="m-desc" placeholder="Например, такси до работы" autocomplete="off" required>
+
+        <label id="m-cat-label">Категория</label>
+        <div class="chips" role="radiogroup" aria-labelledby="m-cat-label">
+            <label class="chip"><input type="radio" name="category" value="" id="m-cat-auto" checked><span>✨ Подберёт Claude</span></label>
+            {% for c in categories %}
+            <label class="chip"><input type="radio" name="category" value="{{ c }}"><span>{{ c|cat_emoji }} {{ c }}</span></label>
+            {% endfor %}
+        </div>
+        <div class="ai-hint" id="m-hint" aria-live="polite"></div>
+
+        <label id="m-day-label">Когда</label>
+        <input type="hidden" name="purchase_date" id="m-date" value="{{ quick_days[0].isoformat() }}">
+        <div class="chips wrap" role="radiogroup" aria-labelledby="m-day-label">
+            {% for d in quick_days %}
+            <label class="chip"><input type="radio" name="day" value="{{ d.isoformat() }}" {% if loop.first %}checked{% endif %}><span>{{ ['Сегодня', 'Вчера', 'Позавчера'][loop.index0] }}</span></label>
+            {% endfor %}
+            <label class="chip"><input type="radio" name="day" value="other"><span>Другая дата…</span></label>
+        </div>
+        <input type="date" id="m-date-other" hidden aria-label="Дата траты">
+
+        <label for="m-store">Где <span style="text-transform:none; letter-spacing:0; font-weight:500">(необязательно)</span></label>
+        <input type="text" name="store_name" id="m-store" placeholder="Магазин или место" autocomplete="off">
+
+        <button type="submit" class="btn btn-primary">Добавить</button>
+    </form>
+</dialog>
+
+<script>
+(function () {
+    // ----- receipt upload: picking a photo submits right away -----
+    var fileInput = document.getElementById('receipt-file');
+    var uploadBtn = document.getElementById('upload-btn');
+    uploadBtn.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+    fileInput.addEventListener('change', function () {
+        if (!fileInput.files.length) return;
+        uploadBtn.setAttribute('aria-busy', 'true');
+        uploadBtn.querySelector('span').textContent = 'Загружаю…';
+        document.getElementById('upload-form').requestSubmit();
+    });
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) return;
+        uploadBtn.removeAttribute('aria-busy');
+        uploadBtn.querySelector('span').textContent = 'Сфотографировать чек';
+        fileInput.value = '';
+    });
+
+    // ----- manual entry sheet -----
+    var sheet = document.getElementById('manual-sheet');
+    var amount = document.getElementById('m-amount');
+    var desc = document.getElementById('m-desc');
+    var hint = document.getElementById('m-hint');
+    var autoCat = document.getElementById('m-cat-auto');
+    var dateField = document.getElementById('m-date');
+    var dateOther = document.getElementById('m-date-other');
+
+    document.getElementById('manual-open').addEventListener('click', function () {
+        sheet.showModal();
+        amount.focus();
+    });
+    // Tap on the dimmed backdrop closes the sheet.
+    sheet.addEventListener('click', function (e) {
+        if (e.target === sheet) sheet.close();
+    });
+
+    // While "✨ Подберёт Claude" is selected, ask for a suggestion once the user
+    // stops typing, and send it as the category so the server needn't ask again.
+    var timer = null, requestSeq = 0;
+    function suggest() {
+        clearTimeout(timer);
+        autoCat.value = '';
+        hint.textContent = '';
+        if (!autoCat.checked || !desc.value.trim()) return;
+        timer = setTimeout(async function () {
+            var mySeq = ++requestSeq;
+            hint.textContent = 'Claude подбирает категорию…';
+            try {
+                var body = new FormData();
+                body.append('description', desc.value);
+                var a = amount.value.replace(/\s/g, '').replace(',', '.');
+                if (a && !isNaN(+a)) body.append('amount', a);
+                var resp = await fetch('/expenses/categorize', { method: 'POST', body: body });
+                var data = await resp.json();
+                if (mySeq !== requestSeq) return;
+                if (resp.ok && data.category) {
+                    autoCat.value = data.category;
+                    hint.textContent = 'Claude выберет: ' + data.category;
                 } else {
-                    input.removeAttribute('capture');
+                    hint.textContent = 'Не удалось подобрать сейчас, попробуем при сохранении';
                 }
-                input.click();
+            } catch (err) {
+                if (mySeq === requestSeq) hint.textContent = 'Нет связи, категорию подберём при сохранении';
             }
-            document.getElementById('receipt-file').addEventListener('change', function () {
-                const name = this.files.length ? this.files[0].name : 'Файл не выбран';
-                document.getElementById('receipt-file-name').textContent = name;
-            });
-        </script>
-    </div>
+        }, 700);
+    }
+    desc.addEventListener('input', suggest);
+    document.querySelectorAll('input[name=category]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            if (autoCat.checked) suggest(); else { clearTimeout(timer); requestSeq++; hint.textContent = ''; }
+        });
+    });
 
-    <div class="tab-panel" id="panel-manual">
-        <form method="post" action="/expenses" id="manual-form">
-            <div class="field-row">
-                <div class="field">
-                    <label>Описание</label>
-                    <input type="text" name="description" id="manual-description" placeholder="Например, такси" required>
-                </div>
-                <div class="field">
-                    <label>Сумма</label>
-                    <input type="number" name="amount" id="manual-amount" step="0.01" min="0" required>
-                </div>
-            </div>
-            <div class="field-row">
-                <div class="field">
-                    <label>Категория</label>
-                    <select name="category" id="manual-category">
-                        <option value="">✨ Определит сетка</option>
-                        {% for c in categories %}
-                        <option value="{{ c }}">{{ c }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="field">
-                    <label>Дата</label>
-                    <input type="date" name="purchase_date" value="{{ today }}">
-                </div>
-            </div>
-            <div class="field-row">
-                <button type="button" class="btn btn-secondary" id="manual-detect">✨ Определить категорию</button>
-                <span class="muted" id="manual-detect-status"></span>
-            </div>
-            <div class="field">
-                <label>Магазин/место (необязательно)</label>
-                <input type="text" name="store_name">
-            </div>
-            <button type="submit" class="btn btn-primary">Добавить трату</button>
-        </form>
-        <script>
-            (function () {
-                const btn = document.getElementById('manual-detect');
-                const status = document.getElementById('manual-detect-status');
-                const description = document.getElementById('manual-description');
-                const amount = document.getElementById('manual-amount');
-                const category = document.getElementById('manual-category');
-
-                btn.addEventListener('click', async function () {
-                    if (!description.value.trim()) {
-                        status.textContent = 'Сначала введите описание';
-                        return;
-                    }
-                    btn.disabled = true;
-                    status.textContent = 'Определяю…';
-                    try {
-                        const body = new FormData();
-                        body.append('description', description.value);
-                        if (amount.value) body.append('amount', amount.value);
-                        const resp = await fetch('/expenses/categorize', { method: 'POST', body });
-                        const data = await resp.json();
-                        if (resp.ok && data.category) {
-                            category.value = data.category;
-                            status.textContent = 'Категория: ' + data.category;
-                        } else {
-                            status.textContent = data.error || 'Не удалось определить';
-                        }
-                    } catch (err) {
-                        status.textContent = 'Ошибка сети';
-                    } finally {
-                        btn.disabled = false;
-                    }
-                });
-            })();
-        </script>
-    </div>
-</div>
-
-<div class="card" style="padding:0">
-{% if receipts %}
-<table>
-    <thead>
-        <tr><th>Дата</th><th>Магазин</th><th>Категория</th><th>Сумма</th><th>Статус</th></tr>
-    </thead>
-    <tbody>
-    {% for r in receipts %}
-        <tr class="row-link" onclick="window.location='/receipts/{{ r.id }}'">
-            <td>{{ r.purchase_date or r.uploaded_at.strftime('%Y-%m-%d') }}</td>
-            <td>{{ r.store_name or '—' }}</td>
-            <td>
-                {% set cats = categories_by_receipt.get(r.id, []) %}
-                {% if cats %}
-                <span style="display:flex; flex-wrap:wrap; gap:0.25rem;">
-                    {% for c in cats %}<span class="badge badge-category">{{ c }}</span>{% endfor %}
-                </span>
-                {% else %}—{% endif %}
-            </td>
-            <td>{{ '%.2f'|format(r.total_amount) if r.total_amount is not none else '—' }} {{ r.currency or '' }}</td>
-            <td><span class="badge badge-{{ r.status.value }}">{{ r.status.value }}</span></td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<div class="empty-state">Пока нет ни одной траты — загрузи чек или добавь вручную.</div>
-{% endif %}
-</div>
+    document.querySelectorAll('input[name=day]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            var other = r.value === 'other';
+            dateOther.hidden = !other;
+            if (other) {
+                dateOther.value = dateOther.value || dateField.value;
+                dateOther.focus();
+                dateField.value = dateOther.value;
+            } else {
+                dateField.value = r.value;
+            }
+        });
+    });
+    dateOther.addEventListener('change', function () { dateField.value = dateOther.value; });
+})();
+</script>
 {% endblock %}

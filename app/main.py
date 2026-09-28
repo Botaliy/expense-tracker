@@ -5,7 +5,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app import database
 from app.database import init_db
+from app.receipts import fail_interrupted_receipts
 from app.routers import auth, dashboard, receipts
 
 settings = get_settings()
@@ -14,6 +16,8 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    with database.SessionLocal() as db:
+        fail_interrupted_receipts(db)
     yield
 
 

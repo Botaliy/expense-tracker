@@ -13,7 +13,7 @@ def test_login_wrong_password_shows_error(client):
 def test_login_success_grants_access(logged_in_client):
     resp = logged_in_client.get("/")
     assert resp.status_code == 200
-    assert "Чеки" in resp.text
+    assert "Сфотографировать чек" in resp.text
 
 
 def test_logout_revokes_access(logged_in_client):

@@ -1,13 +1,20 @@
-from datetime import date
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import LineItem, Receipt
+from app.stats import (
+    effective_date,
+    month_bounds,
+    month_summary,
+    month_nav,
+    monthly_totals,
+    nice_ticks,
+    parse_month,
+)
 from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -19,25 +26,9 @@ def dashboard(
     month: str | None = Query(default=None, description="YYYY-MM"),
     db: Session = Depends(get_db),
 ):
-    today = date.today()
-    if month:
-        year, mon = (int(part) for part in month.split("-"))
-    else:
-        year, mon = today.year, today.month
-    month_str = f"{year:04d}-{mon:02d}"
-
-    start = date(year, mon, 1)
-    end = date(year + 1, 1, 1) if mon == 12 else date(year, mon + 1, 1)
-
-    rows = db.execute(
-        select(LineItem.category, func.sum(LineItem.amount))
-        .join(Receipt, LineItem.receipt_id == Receipt.id)
-        .where(Receipt.purchase_date >= start, Receipt.purchase_date < end)
-        .group_by(LineItem.category)
-        .order_by(func.sum(LineItem.amount).desc())
-    ).all()
-
-    total = sum(amount for _, amount in rows)
+    year, mon = parse_month(month)
+    start, end = month_bounds(year, mon)
+    summary = month_summary(db, year, mon)
 
     detail_rows = db.execute(
         select(
@@ -47,11 +38,11 @@ def dashboard(
             LineItem.quantity,
             Receipt.id,
             Receipt.store_name,
-            Receipt.purchase_date,
+            effective_date,
         )
         .join(Receipt, LineItem.receipt_id == Receipt.id)
-        .where(Receipt.purchase_date >= start, Receipt.purchase_date < end)
-        .order_by(Receipt.purchase_date.desc())
+        .where(effective_date >= start, effective_date < end)
+        .order_by(effective_date.desc())
     ).all()
 
     items_by_category: dict[str, list[dict]] = {}
@@ -67,13 +58,18 @@ def dashboard(
             }
         )
 
+    months = monthly_totals(db, year, mon)
+    ticks = nice_ticks(max(m["total"] for m in months))
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         {
-            "month": month_str,
-            "rows": rows,
-            "total": total,
+            "month": f"{year:04d}-{mon:02d}",
+            "summary": summary,
+            "months": months,
+            "ticks": ticks,
+            "axis_max": ticks[-1] or 1,
             "items_by_category": items_by_category,
+            "nav": month_nav(year, mon),
         },
     )

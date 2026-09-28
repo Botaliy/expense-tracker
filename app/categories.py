@@ -16,6 +16,23 @@ CATEGORIES: list[str] = [
 
 DEFAULT_CATEGORY = "Прочее"
 
+# Emoji and CSS colour token (``--c-<name>`` in base.html) for each category.
+CATEGORY_STYLE: dict[str, tuple[str, str]] = {
+    "Продукты": ("🛒", "food"),
+    "Кафе/рестораны": ("🍽️", "cafe"),
+    "Транспорт": ("🚕", "transport"),
+    "Авто": ("🚗", "auto"),
+    "Жильё/коммуналка": ("🏠", "home"),
+    "Здоровье": ("💊", "health"),
+    "Красота": ("💅", "beauty"),
+    "Одежда": ("👕", "clothes"),
+    "Техника": ("🎮", "tech"),
+    "Алкоголь": ("🍷", "alco"),
+    "Развлечения": ("🎬", "fun"),
+    "Связь/интернет": ("📶", "net"),
+    "Прочее": ("📦", "other"),
+}
+
 # Shared disambiguation notes, used both for receipt extraction and for
 # categorising a single manually entered expense.
 CATEGORY_GUIDANCE = (

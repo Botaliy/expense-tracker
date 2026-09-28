@@ -1,65 +1,111 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai_client import ExpenseCategorizationError, categorize_expense
 from app.auth import get_current_user
 from app.categories import CATEGORIES, DEFAULT_CATEGORY
 from app.database import get_db
-from app.models import LineItem, Receipt
-from app.receipts import create_manual_expense, create_receipt, process_receipt, save_upload
+from app.feed import month_feed
+from app.models import LineItem, Receipt, ReceiptStatus
+from app.receipts import (
+    create_manual_expense,
+    create_receipt,
+    process_receipt_in_background,
+    save_upload,
+)
+from app.stats import month_bounds, month_nav, month_summary, parse_month
 from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("/", response_class=HTMLResponse)
-def list_receipts(request: Request, db: Session = Depends(get_db)):
-    receipts = db.execute(
-        select(Receipt).order_by(Receipt.uploaded_at.desc())
-    ).scalars().all()
-
-    categories_by_receipt: dict[int, list[str]] = {}
-    if receipts:
-        cat_rows = db.execute(
-            select(LineItem.receipt_id, LineItem.category)
-            .where(LineItem.receipt_id.in_([r.id for r in receipts]))
-            .distinct()
-            .order_by(LineItem.category)
-        ).all()
-        for receipt_id, category in cat_rows:
-            categories_by_receipt.setdefault(receipt_id, []).append(category)
+def list_receipts(
+    request: Request,
+    month: str | None = Query(default=None, description="YYYY-MM"),
+    db: Session = Depends(get_db),
+):
+    year, mon = parse_month(month)
+    start, end = month_bounds(year, mon)
+    today = date.today()
+    days = month_feed(db, start, end)
 
     return templates.TemplateResponse(
         request,
         "receipts_list.html",
         {
-            "receipts": receipts,
+            "days": days,
+            "summary": month_summary(db, year, mon),
+            "has_pending": any(
+                e.receipt.status == ReceiptStatus.PENDING for d in days for e in d.entries
+            ),
+            "nav": month_nav(year, mon),
             "categories": CATEGORIES,
-            "categories_by_receipt": categories_by_receipt,
-            "today": date.today().isoformat(),
+            "quick_days": [today - timedelta(days=n) for n in range(3)],
         },
     )
 
 
+def _parse_amount(value: str) -> float:
+    """Accept what people type on a Russian keyboard: "1 890", "199,90"."""
+    try:
+        cleaned = value.replace("\u00a0", "").replace(" ", "").replace(",", ".").replace("−", "-")
+        return float(cleaned)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid amount")
+
+
+def _sync_total(receipt: Receipt) -> None:
+    receipt.total_amount = round(sum(i.amount for i in receipt.items), 2)
+
+
+def _get_receipt(db: Session, receipt_id: int) -> Receipt:
+    receipt = db.get(Receipt, receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    return receipt
+
+
+def _receipt_day(receipt: Receipt) -> date:
+    return receipt.purchase_date or receipt.uploaded_at.date()
+
+
+def _home_url(day: date | None, receipt_id: int) -> str:
+    """Feed page for the month the receipt landed in, scrolled to its row."""
+    day = day or date.today()
+    return f"/?month={day:%Y-%m}#r-{receipt_id}"
+
+
+# Plain ``def`` so FastAPI runs it in a threadpool; recognition itself happens
+# in a background task, and the feed polls until it finishes.
 @router.post("/receipts", response_class=HTMLResponse)
-async def upload_receipt(
-    request: Request,
+def upload_receipt(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    content = await file.read()
+    content = file.file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
 
     image_path = save_upload(file.filename or "receipt.jpg", content)
     receipt = create_receipt(db, image_path)
-    process_receipt(db, receipt)
+    background_tasks.add_task(process_receipt_in_background, receipt.id)
 
-    return RedirectResponse(url=f"/receipts/{receipt.id}", status_code=303)
+    return RedirectResponse(url=_home_url(None, receipt.id), status_code=303)
 
 
 @router.post("/expenses/categorize", response_class=JSONResponse)
@@ -78,12 +124,14 @@ def categorize_manual_expense(
 @router.post("/expenses", response_class=HTMLResponse)
 def add_manual_expense(
     description: str = Form(...),
-    amount: float = Form(...),
+    amount: str = Form(...),
     category: str | None = Form(default=None),
     purchase_date: str | None = Form(default=None),
     store_name: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
+    parsed_amount = _parse_amount(amount)
+
     parsed_date: date | None = None
     if purchase_date:
         try:
@@ -94,30 +142,39 @@ def add_manual_expense(
     # No category picked → let the model classify it from the description/amount.
     if not category or not category.strip():
         try:
-            category = categorize_expense(description, amount)
+            category = categorize_expense(description, parsed_amount)
         except ExpenseCategorizationError:
             category = DEFAULT_CATEGORY
 
     receipt = create_manual_expense(
         db,
         description=description,
-        amount=amount,
+        amount=parsed_amount,
         category=category,
         purchase_date=parsed_date,
         store_name=store_name,
     )
-    return RedirectResponse(url=f"/receipts/{receipt.id}", status_code=303)
+    return RedirectResponse(url=_home_url(parsed_date, receipt.id), status_code=303)
 
 
 @router.get("/receipts/{receipt_id}", response_class=HTMLResponse)
 def receipt_detail(request: Request, receipt_id: int, db: Session = Depends(get_db)):
-    receipt = db.get(Receipt, receipt_id)
-    if receipt is None:
-        raise HTTPException(status_code=404, detail="Receipt not found")
+    receipt = _get_receipt(db, receipt_id)
+
+    by_category: dict[str, float] = {}
+    for item in receipt.items:
+        by_category[item.category] = by_category.get(item.category, 0) + item.amount
+
     return templates.TemplateResponse(
         request,
         "receipt_detail.html",
-        {"receipt": receipt, "categories": CATEGORIES},
+        {
+            "receipt": receipt,
+            "day": _receipt_day(receipt),
+            "by_category": sorted(by_category.items(), key=lambda c: -c[1]),
+            "back_url": _home_url(_receipt_day(receipt), receipt.id),
+            "categories": CATEGORIES,
+        },
     )
 
 
@@ -148,12 +205,25 @@ def update_receipt(
 
 
 @router.post("/receipts/{receipt_id}/retry", response_class=HTMLResponse)
-def retry_receipt(receipt_id: int, db: Session = Depends(get_db)):
+def retry_receipt(
+    receipt_id: int,
+    background_tasks: BackgroundTasks,
+    next_url: str | None = Form(default=None, alias="next"),
+    db: Session = Depends(get_db),
+):
     receipt = db.get(Receipt, receipt_id)
     if receipt is None:
         raise HTTPException(status_code=404, detail="Receipt not found")
-    process_receipt(db, receipt)
-    return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
+    if receipt.image_path is None:
+        raise HTTPException(status_code=400, detail="Manual expense has no photo to recognize")
+    receipt.status = ReceiptStatus.PENDING
+    receipt.error_message = None
+    db.commit()
+    background_tasks.add_task(process_receipt_in_background, receipt_id)
+    # Only local paths: never bounce to another site.
+    if not next_url or not next_url.startswith("/") or next_url.startswith("//"):
+        next_url = f"/receipts/{receipt_id}"
+    return RedirectResponse(url=next_url, status_code=303)
 
 
 @router.post("/receipts/{receipt_id}/items/{item_id}", response_class=HTMLResponse)
@@ -162,8 +232,8 @@ def update_item(
     item_id: int,
     category: str = Form(...),
     description: str | None = Form(default=None),
-    amount: float | None = Form(default=None),
-    quantity: float | None = Form(default=None),
+    amount: str | None = Form(default=None),
+    quantity: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     item = db.get(LineItem, item_id)
@@ -175,14 +245,52 @@ def update_item(
     item.category = category
     if description is not None and description.strip():
         item.description = description.strip()
-    if amount is not None and amount >= 0:
-        item.amount = amount
+    if amount is not None and amount.strip():  # negative is allowed: discount lines
+        item.amount = _parse_amount(amount)
     if quantity is not None:
-        item.quantity = quantity if quantity > 0 else None
+        parsed_quantity = _parse_amount(quantity) if quantity.strip() else 0
+        item.quantity = parsed_quantity if parsed_quantity > 0 else None
 
     # Keep the receipt total in sync with its line items.
-    item.receipt.total_amount = sum(i.amount for i in item.receipt.items)
+    _sync_total(item.receipt)
 
+    db.commit()
+    return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
+
+
+@router.post("/receipts/{receipt_id}/items", response_class=HTMLResponse)
+def add_item(
+    receipt_id: int,
+    description: str = Form(...),
+    amount: str = Form(...),
+    category: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    receipt = _get_receipt(db, receipt_id)
+    if category not in CATEGORIES:
+        raise HTTPException(status_code=400, detail="Unknown category")
+    if not description.strip():
+        raise HTTPException(status_code=400, detail="Empty description")
+
+    item = LineItem(description=description.strip(), amount=_parse_amount(amount), category=category)
+    receipt.items.append(item)
+    _sync_total(receipt)
+    # A receipt the model couldn't read counts as done once filled in by hand.
+    if receipt.status == ReceiptStatus.FAILED:
+        receipt.status = ReceiptStatus.PROCESSED
+        receipt.error_message = None
+    db.commit()
+    return RedirectResponse(url=f"/receipts/{receipt_id}#item-{item.id}", status_code=303)
+
+
+@router.post("/receipts/{receipt_id}/items/{item_id}/delete", response_class=HTMLResponse)
+def delete_item(receipt_id: int, item_id: int, db: Session = Depends(get_db)):
+    item = db.get(LineItem, item_id)
+    if item is None or item.receipt_id != receipt_id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    receipt = item.receipt
+    receipt.items.remove(item)
+    _sync_total(receipt)
     db.commit()
     return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=303)
 
@@ -209,6 +317,7 @@ def delete_receipt(receipt_id: int, db: Session = Depends(get_db)):
     receipt = db.get(Receipt, receipt_id)
     if receipt is None:
         raise HTTPException(status_code=404, detail="Receipt not found")
+    day = _receipt_day(receipt)
     db.delete(receipt)
     db.commit()
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url=f"/?month={day:%Y-%m}", status_code=303)

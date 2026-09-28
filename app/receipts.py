@@ -8,6 +8,7 @@ from app.ai_client import ReceiptExtractionError, extract_receipt_data
 from app.categories import normalize_category
 from app.config import get_settings
 from app.models import LineItem, Receipt, ReceiptStatus
+from app.schemas import ExtractedReceipt
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -17,6 +18,27 @@ def _parse_date(value: str | None) -> date | None:
         return datetime.fromisoformat(value).date()
     except ValueError:
         return None
+
+
+def _total_adjustment(extracted: ExtractedReceipt) -> LineItem | None:
+    """Line item covering the gap between the printed total and the items.
+
+    Receipt-level discounts (loyalty card, rounding) show up only in the total,
+    and the model occasionally misses an item. Either way the printed total is
+    what was actually paid, so the difference is kept as an explicit line the
+    user can see and fix, rather than silently dropped.
+    """
+    if extracted.total_amount is None or not extracted.items:
+        return None
+    diff = round(extracted.total_amount - sum(i.amount for i in extracted.items), 2)
+    if abs(diff) < 0.01:
+        return None
+    largest = max(extracted.items, key=lambda i: i.amount)
+    return LineItem(
+        description="Скидка" if diff < 0 else "Корректировка",
+        amount=diff,
+        category=largest.category,
+    )
 
 
 def save_upload(filename: str, content: bytes) -> Path:
@@ -80,9 +102,6 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
     receipt.store_name = extracted.store_name
     receipt.purchase_date = _parse_date(extracted.purchase_date)
     receipt.currency = extracted.currency
-    receipt.total_amount = extracted.total_amount or sum(
-        item.amount for item in extracted.items
-    )
     receipt.raw_ai_response = extracted.model_dump_json()
     receipt.status = ReceiptStatus.PROCESSED
     receipt.error_message = None
@@ -98,6 +117,35 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
             )
         )
 
+    adjustment = _total_adjustment(extracted)
+    if adjustment is not None:
+        receipt.items.append(adjustment)
+
+    # Totals are always the sum of line items, so the receipt and the dashboard
+    # (which aggregates line items) never disagree.
+    receipt.total_amount = round(sum(item.amount for item in receipt.items), 2)
+
     db.commit()
     db.refresh(receipt)
     return receipt
+
+
+def process_receipt_in_background(receipt_id: int) -> None:
+    """Run recognition after the upload response has been sent.
+
+    Uses its own session: the request's one is closed by then.
+    """
+    from app import database
+
+    with database.SessionLocal() as db:
+        receipt = db.get(Receipt, receipt_id)
+        if receipt is not None:
+            process_receipt(db, receipt)
+
+
+def fail_interrupted_receipts(db: Session) -> None:
+    """Receipts left pending by a restart will never finish — let them be retried."""
+    for receipt in db.query(Receipt).filter(Receipt.status == ReceiptStatus.PENDING):
+        receipt.status = ReceiptStatus.FAILED
+        receipt.error_message = "Распознавание прервалось, попробуйте ещё раз"
+    db.commit()

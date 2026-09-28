@@ -1,8 +1,10 @@
 import base64
+import io
 import mimetypes
 from pathlib import Path
 
 from anthropic import Anthropic
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.categories import (
     CATEGORIES,
@@ -99,10 +101,28 @@ class ExpenseCategorizationError(RuntimeError):
     pass
 
 
+# The model downscales anything larger anyway, and the API rejects images over
+# 5 MB — phone photos routinely exceed both, so shrink before sending.
+MAX_IMAGE_EDGE = 1568
+
+
+def _prepare_image(image_path: Path) -> tuple[str, bytes]:
+    raw = image_path.read_bytes()
+    try:
+        with Image.open(io.BytesIO(raw)) as img:
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE))
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=85)
+            return "image/jpeg", buf.getvalue()
+    except (UnidentifiedImageError, OSError):
+        # Not something Pillow can read — send as-is and let the API decide.
+        return mimetypes.guess_type(image_path.name)[0] or "image/jpeg", raw
+
+
 def _encode_image(image_path: Path) -> tuple[str, str]:
-    media_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
-    data = base64.standard_b64encode(image_path.read_bytes()).decode("utf-8")
-    return media_type, data
+    media_type, content = _prepare_image(image_path)
+    return media_type, base64.standard_b64encode(content).decode("utf-8")
 
 
 def extract_receipt_data(image_path: Path) -> ExtractedReceipt:

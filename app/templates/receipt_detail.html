@@ -1,100 +1,336 @@
 {% extends "base.html" %}
-{% block title %}Трата #{{ receipt.id }}{% endblock %}
+{% set r = receipt %}
+{% block title %}{{ r.store_name or ('Чек #' ~ r.id) }}{% endblock %}
+{% block head %}
+{% if r.status.value == 'pending' %}<meta http-equiv="refresh" content="2">{% endif %}
+<style>
+    .detail { display: flex; flex-direction: column; gap: 14px; }
+
+    .back {
+        align-self: flex-start; display: inline-flex; align-items: center; gap: 4px;
+        color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px;
+        padding: 4px 10px 4px 4px; border-radius: 10px;
+    }
+    .back:hover { color: var(--text); background: var(--surface); }
+    .back span { font-size: 20px; line-height: 1; }
+
+    /* Inputs that read as plain text until touched: this page is edited in place.
+       Scoped under .detail to outrank base.html's input[type=text] rule. */
+    .detail .bare {
+        border: 1px solid transparent; background: transparent; color: inherit; border-radius: 10px;
+        padding: 4px 8px; margin: 0 -8px; min-width: 0; width: 100%;
+        transition: background .15s ease, border-color .15s ease;
+    }
+    .detail .bare:hover { background: var(--surface-2); }
+    .detail .bare:focus { background: var(--surface-2); border-color: var(--line); outline: 2px solid var(--accent); outline-offset: 0; }
+    .detail .bare::placeholder { color: var(--muted); opacity: .7; }
+
+    .head { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px; }
+    .head-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; }
+    .head-fields { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .detail .title-input { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+    .date-row { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+    .date-row svg { width: 16px; height: 16px; flex: none; }
+    .detail .date-input { width: auto; font-size: 14px; color: var(--muted); margin-left: -4px; }
+    .thumb {
+        width: 64px; height: 84px; border-radius: 12px; overflow: hidden; border: 0; padding: 0; cursor: zoom-in;
+        background: var(--surface-2); box-shadow: 0 0 0 1px var(--line);
+    }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .total { font-size: 36px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin-top: 14px; }
+    .total .kop { font-size: 22px; }
+    .head .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .catbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; gap: 2px; margin: 14px 0 10px; }
+    .catbar span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+    .legend b { color: var(--text); font-weight: 600; }
+
+    .banner { border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .banner.failed { background: var(--danger-soft); }
+    .banner.failed b { color: var(--danger); }
+    .banner.pending { background: var(--surface); box-shadow: var(--shadow); flex-direction: row; align-items: center; gap: 12px; }
+    .banner .why { font-size: 13px; color: var(--muted); word-break: break-word; }
+    .banner .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+    .spin {
+        width: 20px; height: 20px; border-radius: 50%; flex: none;
+        border: 2px solid var(--line); border-top-color: var(--accent); animation: rot .8s linear infinite;
+    }
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    .items-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 6px 8px; }
+    .items-head .h { font-size: 13px; font-weight: 700; }
+    .items-head .h span { color: var(--muted); font-weight: 500; margin-left: 4px; }
+    .items-head select {
+        width: auto; font-size: 13px; padding: 5px 8px; border-radius: 10px; background: var(--surface); color: var(--muted);
+    }
+    .item-list { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); overflow: hidden; }
+
+    .item {
+        display: grid; grid-template-columns: 36px minmax(0, 1fr) 72px auto; gap: 4px 10px; align-items: center;
+        padding: 10px 12px 12px 14px; scroll-margin: 20px 0 110px;
+    }
+    .item + .item { border-top: 1px solid var(--line); }
+    .item:target { animation: flash 1.6s ease; }
+    @keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
+    .item form { display: contents; }
+    .item .ico {
+        grid-row: span 2; align-self: start; margin-top: 2px;
+        width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 18px;
+        background: color-mix(in srgb, var(--c) 16%, var(--surface));
+    }
+    /* Forms inside are display: contents, so every control is placed explicitly. */
+    .item .desc { grid-column: 2 / 4; grid-row: 1; font-weight: 600; }
+    .item .del {
+        border: 0; background: none; color: var(--muted); width: 30px; height: 30px; border-radius: 9px; cursor: pointer;
+        display: grid; place-items: center; justify-self: end; grid-column: 4; grid-row: 1;
+    }
+    .item .del:hover { background: var(--danger-soft); color: var(--danger); }
+    .item .del svg { width: 16px; height: 16px; }
+    .item .cat {
+        grid-column: 2; grid-row: 2;
+        width: auto; max-width: 100%; justify-self: start; font-size: 13px; padding: 3px 26px 3px 8px; border-radius: 99px;
+        border: 1px solid var(--line); background-color: var(--surface); color: var(--muted);
+    }
+    .item .qty-wrap { grid-column: 3; grid-row: 2; }
+    .item .qty-wrap, .item .amt-wrap { display: flex; align-items: baseline; gap: 2px; color: var(--muted); font-size: 13px; }
+    .item .qty { text-align: right; font-size: 13px; color: var(--muted); padding-inline: 4px; margin: 0; }
+    .item .amt-wrap { grid-column: 4; grid-row: 2; justify-self: end; color: var(--text); font-weight: 700; }
+    .item .amt { width: 7ch; text-align: right; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; margin: 0; padding-inline: 4px; }
+    .item .amt-wrap span { color: var(--muted); }
+
+    .add-item summary { list-style: none; cursor: pointer; }
+    .add-item summary::-webkit-details-marker { display: none; }
+    .add-item summary.btn { width: 100%; min-height: 48px; box-shadow: var(--shadow); border: 0; }
+    .add-item[open] summary { display: none; }
+    .add-item form {
+        background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); padding: 16px;
+        display: grid; grid-template-columns: minmax(0, 1fr) 8rem; gap: 10px;
+    }
+    .add-item form > * { margin: 0; }
+    .add-item .full { grid-column: 1 / -1; }
+    .add-item .btns { grid-column: 1 / -1; display: flex; gap: 8px; }
+    .add-item .btns .btn-primary { flex: 1; }
+
+    .danger-zone { display: flex; justify-content: center; padding-top: 6px; }
+
+    dialog.lightbox { border: 0; padding: 0; background: none; max-width: 96vw; max-height: 94dvh; }
+    dialog.lightbox::backdrop { background: rgba(0, 0, 0, .85); }
+    dialog.lightbox img { max-width: 96vw; max-height: 94dvh; display: block; border-radius: 12px; cursor: zoom-out; }
+
+    .toast {
+        position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 20;
+        background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 12px; font-size: 14px; font-weight: 500;
+        box-shadow: var(--shadow); pointer-events: none;
+    }
+</style>
+{% endblock %}
 {% block content %}
-<p><a href="/" class="btn btn-ghost btn-sm">&larr; Назад</a></p>
+<main class="detail">
+    <a class="back" id="back-link" href="{{ back_url }}"><span>‹</span> Все траты</a>
 
-<div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-        <h1 style="margin:0">{{ receipt.store_name or ('Трата #' ~ receipt.id) }}</h1>
-        <span class="badge badge-{{ receipt.status.value }}">{{ receipt.status.value }}</span>
-    </div>
-    <p class="muted">
-        {{ receipt.purchase_date or receipt.uploaded_at.strftime('%Y-%m-%d') }}
-        &middot; Итого: <strong>{{ '%.2f'|format(receipt.total_amount) if receipt.total_amount is not none else '—' }} {{ receipt.currency or '' }}</strong>
-    </p>
-</div>
+    <section class="head">
+        <form class="head-top" method="post" action="/receipts/{{ r.id }}"
+              hx-post="/receipts/{{ r.id }}" hx-trigger="change, submit" hx-swap="none" hx-select-oob="#back-link">
+            <div class="head-fields">
+                <input class="bare title-input" type="text" name="store_name" value="{{ r.store_name or '' }}"
+                       placeholder="Магазин или место" aria-label="Магазин или место" autocomplete="off">
+                <label class="date-row" style="margin:0; text-transform:none; letter-spacing:0; font-weight:500;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+                    <input class="bare date-input" type="date" name="purchase_date" aria-label="Дата покупки"
+                           value="{{ r.purchase_date.isoformat() if r.purchase_date else '' }}">
+                    {% if not r.purchase_date %}<span>загружен {{ day|human_date|lower }}</span>{% endif %}
+                </label>
+            </div>
+            {% if r.image_path %}
+            <button type="button" class="thumb" id="thumb" aria-label="Открыть фото чека">
+                <img src="/uploads/{{ r.image_path }}" alt="">
+            </button>
+            {% endif %}
+        </form>
 
-<div class="card">
-    <form method="post" action="/receipts/{{ receipt.id }}">
-        <div class="field-row">
-            <div class="field" style="flex:2;">
-                <label>Магазин / место</label>
-                <input type="text" name="store_name" value="{{ receipt.store_name or '' }}" placeholder="Например, Пятёрочка">
+        <div id="receipt-summary">
+            <div class="total num">{{ r.total_amount|money(r.currency) if r.items else 0|money(r.currency) }}</div>
+            <div class="sub">
+                {% if not r.items %}Позиций пока нет
+                {% else %}{{ plural(r.items|length, 'позиция', 'позиции', 'позиций') }} ·
+                {{ 'добавлено вручную' if not r.image_path else 'распознано по фото' }}{% endif %}
             </div>
-            <div class="field">
-                <label>Дата</label>
-                <input type="date" name="purchase_date" value="{{ receipt.purchase_date.isoformat() if receipt.purchase_date else '' }}">
+            {% if by_category|length > 1 %}
+            <div class="catbar" aria-hidden="true">
+                {% for cat, amount in by_category if amount > 0 %}
+                <span style="flex-grow: {{ amount }}; background: {{ cat|cat_color }}"></span>
+                {% endfor %}
             </div>
+            <div class="legend">
+                {% for cat, amount in by_category %}
+                <span>{{ cat|cat_emoji }} {{ cat }} <b class="num">{{ amount|money(r.currency) }}</b></span>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
-        <button type="submit" class="btn btn-secondary">Сохранить</button>
-    </form>
-</div>
+    </section>
 
-{% if receipt.image_path %}
-<div class="card">
-    <img src="/uploads/{{ receipt.image_path }}" alt="Receipt" style="max-width:100%; max-height:420px; border-radius:10px; display:block; margin:0 auto;">
-</div>
-{% endif %}
+    {% if r.status.value == 'pending' %}
+    <div class="banner pending">
+        <span class="spin"></span>
+        <div><b>Распознаю чек…</b><div class="why">Страница обновится сама, обычно это 5–15 секунд.</div></div>
+    </div>
+    {% elif r.status.value == 'failed' %}
+    <div class="banner failed">
+        <div>
+            <b>Claude не смог распознать чек</b>
+            {% if r.error_message %}<div class="why">{{ r.error_message }}</div>{% endif %}
+        </div>
+        <div class="acts">
+            {% if r.image_path %}
+            <form method="post" action="/receipts/{{ r.id }}/retry">
+                <button type="submit" class="btn btn-secondary btn-sm">Повторить распознавание</button>
+            </form>
+            {% endif %}
+            <button type="button" class="btn btn-ghost btn-sm" data-open-add>Заполнить вручную</button>
+        </div>
+    </div>
+    {% endif %}
 
-{% if receipt.status.value == 'failed' %}
-<div class="card">
-    <p class="error">Ошибка распознавания: {{ receipt.error_message }}</p>
-    <form method="post" action="/receipts/{{ receipt.id }}/retry">
-        <button type="submit" class="btn btn-secondary">Повторить распознавание</button>
-    </form>
-</div>
-{% endif %}
+    <section id="items">
+        {% if r.items %}
+        <div class="items-head">
+            <span class="h">Позиции<span>{{ r.items|length }}</span></span>
+            {% if r.items|length > 1 %}
+            <form method="post" action="/receipts/{{ r.id }}/category"
+                  hx-post="/receipts/{{ r.id }}/category" hx-trigger="change" hx-swap="none" hx-select-oob="#receipt-summary,#items">
+                <select name="category" aria-label="Поставить всем позициям одну категорию">
+                    <option value="" selected disabled>Все в категорию…</option>
+                    {% for c in categories %}<option value="{{ c }}">{{ c|cat_emoji }} {{ c }}</option>{% endfor %}
+                </select>
+            </form>
+            {% endif %}
+        </div>
+        <div class="item-list">
+            {% for item in r.items %}
+            <div class="item" id="item-{{ item.id }}">
+                <span class="ico" id="ico-{{ item.id }}" style="--c: {{ item.category|cat_color }}">{{ item.category|cat_emoji }}</span>
+                <form method="post" action="/receipts/{{ r.id }}/items/{{ item.id }}"
+                      hx-post="/receipts/{{ r.id }}/items/{{ item.id }}" hx-trigger="change, submit"
+                      hx-swap="none" hx-select-oob="#receipt-summary,#ico-{{ item.id }}">
+                    <input class="bare desc" type="text" name="description" value="{{ item.description }}"
+                           required aria-label="Название позиции" autocomplete="off">
+                    <select class="cat" name="category" aria-label="Категория">
+                        {% for c in categories %}
+                        <option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c|cat_emoji }} {{ c }}</option>
+                        {% endfor %}
+                    </select>
+                    <label class="qty-wrap" style="margin:0; text-transform:none; letter-spacing:0; font-weight:500;">
+                        ×<input class="bare qty" type="text" name="quantity" inputmode="decimal" placeholder="1"
+                                value="{{ item.quantity|plain_amount if item.quantity else '' }}" aria-label="Количество" autocomplete="off">
+                    </label>
+                    <span class="amt-wrap">
+                        <input class="bare amt" type="text" name="amount" inputmode="decimal" required
+                               pattern="\s*[\-−]?\d[\d\s]*([.,]\d{1,2})?\s*"
+                               value="{{ item.amount|plain_amount }}" aria-label="Сумма" autocomplete="off">
+                        <span>₽</span>
+                    </span>
+                </form>
+                <form method="post" action="/receipts/{{ r.id }}/items/{{ item.id }}/delete"
+                      onsubmit="return confirm('Удалить «{{ item.description|replace("'", "")|e }}»?')">
+                    <button type="submit" class="del" aria-label="Удалить позицию">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>
 
-{% if receipt.items %}
-{% if receipt.items|length > 1 %}
-<div class="card">
-    <form method="post" action="/receipts/{{ receipt.id }}/category" class="field-row" style="align-items:flex-end; margin-bottom:0;">
-        <div class="field" style="flex:1; margin-bottom:0;">
-            <label>Категория для всех позиций</label>
-            <select name="category">
+    {% if r.status.value != 'pending' %}
+    <details class="add-item" id="add-item">
+        <summary class="btn btn-secondary">+ Добавить позицию</summary>
+        <form method="post" action="/receipts/{{ r.id }}/items">
+            <input class="full" type="text" name="description" placeholder="Что купили" required aria-label="Название" autocomplete="off">
+            <select name="category" aria-label="Категория">
+                {% set default_cat = by_category[0][0] if by_category else 'Прочее' %}
                 {% for c in categories %}
-                <option value="{{ c }}">{{ c }}</option>
+                <option value="{{ c }}" {% if c == default_cat %}selected{% endif %}>{{ c|cat_emoji }} {{ c }}</option>
                 {% endfor %}
             </select>
-        </div>
-        <button type="submit" class="btn btn-secondary">Применить ко всем</button>
-    </form>
-</div>
-{% endif %}
-<div class="card" style="padding:0">
-<table>
-    <thead><tr><th>Позиция</th><th>Кол-во</th><th>Сумма</th><th>Категория</th><th></th></tr></thead>
-    <tbody>
-    {% for item in receipt.items %}
-        <tr>
-            <td>
-                <form id="item-{{ item.id }}" method="post" action="/receipts/{{ receipt.id }}/items/{{ item.id }}"></form>
-                <input type="text" name="description" value="{{ item.description }}" form="item-{{ item.id }}" required>
-            </td>
-            <td style="max-width:5rem;">
-                <input type="number" name="quantity" step="0.01" min="0" value="{{ item.quantity or '' }}" form="item-{{ item.id }}">
-            </td>
-            <td style="max-width:7rem;">
-                <input type="number" name="amount" step="0.01" min="0" value="{{ '%.2f'|format(item.amount) }}" form="item-{{ item.id }}" required>
-            </td>
-            <td>
-                <select name="category" form="item-{{ item.id }}">
-                    {% for c in categories %}
-                    <option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c }}</option>
-                    {% endfor %}
-                </select>
-            </td>
-            <td>
-                <button type="submit" class="btn btn-secondary btn-sm" form="item-{{ item.id }}">Сохранить</button>
-            </td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-</div>
+            <input type="text" name="amount" inputmode="decimal" placeholder="Сумма, ₽" required
+                   pattern="\s*[\-−]?\d[\d\s]*([.,]\d{1,2})?\s*" aria-label="Сумма" autocomplete="off">
+            <div class="btns">
+                <button type="submit" class="btn btn-primary">Добавить</button>
+                <button type="button" class="btn btn-ghost" data-close-add>Отмена</button>
+            </div>
+        </form>
+    </details>
+    {% endif %}
+
+    <div class="danger-zone">
+        <form method="post" action="/receipts/{{ r.id }}/delete" onsubmit="return confirm('Удалить этот чек целиком?')">
+            <button type="submit" class="btn btn-ghost btn-sm" style="color: var(--danger)">Удалить чек</button>
+        </form>
+    </div>
+</main>
+
+{% if r.image_path %}
+<dialog class="lightbox" id="lightbox" aria-label="Фото чека">
+    <img src="/uploads/{{ r.image_path }}" alt="Фото чека">
+</dialog>
 {% endif %}
 
-<form method="post" action="/receipts/{{ receipt.id }}/delete" onsubmit="return confirm('Удалить эту трату?')">
-    <button type="submit" class="btn btn-danger">Удалить</button>
-</form>
+<script>
+(function () {
+    var lightbox = document.getElementById('lightbox');
+    if (lightbox) {
+        document.getElementById('thumb').addEventListener('click', function () { lightbox.showModal(); });
+        lightbox.addEventListener('click', function () { lightbox.close(); });
+    }
+
+    var add = document.getElementById('add-item');
+    document.addEventListener('click', function (e) {
+        if (!add) return;
+        if (e.target.closest('[data-open-add]')) {
+            add.open = true;
+            add.querySelector('input[name=description]').focus();
+            add.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        if (e.target.closest('[data-close-add]')) add.open = false;
+    });
+
+    var toastTimer;
+    function toast(text) {
+        var el = document.querySelector('.toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'toast';
+            el.setAttribute('role', 'status');
+            document.body.appendChild(el);
+        }
+        el.textContent = text;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { el.remove(); }, 1500);
+    }
+
+    // Autosaved forms: htmx posts them on change; the server redirects back to
+    // this page and only the summary, icons and back link are swapped in.
+    document.body.addEventListener('htmx:beforeRequest', function (e) {
+        var form = e.detail.elt;
+        // Don't save a half-typed amount the browser already knows is invalid.
+        if (form.checkValidity && !form.checkValidity()) {
+            e.preventDefault();
+            form.reportValidity();
+        }
+    });
+    document.body.addEventListener('htmx:afterRequest', function (e) {
+        toast(e.detail.successful ? 'Сохранено' : 'Не удалось сохранить, проверьте значения');
+    });
+    // Enter in an item field saves it; move on instead of leaving focus stuck.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('bare')) {
+            e.preventDefault();
+            e.target.blur();
+        }
+    });
+})();
+</script>
 {% endblock %}

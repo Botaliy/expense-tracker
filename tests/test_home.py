@@ -33,8 +33,8 @@ def test_feed_groups_by_day_with_formatted_amounts(logged_in_client):
     assert "Сегодня" in page
     assert "Пятёрочка" in page
     assert "Такси домой" in page
-    assert "1 890 ₽" in page
-    assert "2 340 ₽" in page  # day subtotal and month total
+    assert "1 890 €" in page
+    assert "2 340 €" in page  # day subtotal and month total
     assert "🛒" in page and "🚕" in page
     assert f"на {date.today().day} " in page
 
@@ -173,10 +173,11 @@ def test_interrupted_receipts_are_failed_on_startup(logged_in_client):
 def test_money_filter():
     from app.templating import money
 
-    assert money(1890) == "1 890 ₽"
-    assert money(2315.4) == '2 315<span class="kop">,40</span> ₽'
-    assert money(-30) == "−30 ₽"
+    assert money(1890) == "1 890 €"
+    assert money(2315.4) == '2 315<span class="cents">,40</span> €'
+    assert money(-30) == "−30 €"
     assert money(5, "USD") == "5 USD"
+    assert money(5, "eur") == "5\u00a0€"
     assert money(None) == "—"
 
 

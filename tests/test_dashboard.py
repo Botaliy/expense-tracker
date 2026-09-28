@@ -8,7 +8,7 @@ def test_dashboard_aggregates_by_category(logged_in_client):
     extraction = ExtractedReceipt(
         store_name="Магазин",
         purchase_date="2026-08-05",
-        currency="RUB",
+        currency="EUR",
         total_amount=150.0,
         items=[
             ExtractedLineItem(description="Молоко", amount=100.0, category="Продукты"),
@@ -25,7 +25,7 @@ def test_dashboard_aggregates_by_category(logged_in_client):
     assert resp.status_code == 200
     assert "Продукты" in resp.text
     assert "Транспорт" in resp.text
-    assert "150\u00a0₽" in resp.text
+    assert "150\u00a0€" in resp.text
 
 
 def test_dashboard_empty_month(logged_in_client):
@@ -45,7 +45,7 @@ def test_dashboard_includes_expense_without_purchase_date(logged_in_client):
         "/dashboard", params={"month": date.today().strftime("%Y-%m")}
     )
     assert "Без даты" in resp.text
-    assert "77\u00a0₽" in resp.text
+    assert "77\u00a0€" in resp.text
 
 
 def test_dashboard_invalid_month_falls_back(logged_in_client):
@@ -81,11 +81,11 @@ def test_dashboard_months_chart_and_category_deltas(logged_in_client):
     # Six columns ending with the selected month, which is marked current.
     for short in ("апр", "май", "июн", "июл", "авг", "сен"):
         assert f">{short}<" in page
-    assert 'aria-label="Август 2026: 3 500 ₽"' in page  # striptags normalises spaces
+    assert 'aria-label="Август 2026: 3 500 €"' in page  # striptags normalises spaces
     assert 'aria-current="page"' in page
     # Per-category change vs previous month.
-    assert "↓ −1\u00a0000\u00a0₽" in page  # Продукты 3000 → 2000
-    assert "↑ +200\u00a0₽" in page  # Кафе 500 → 700
+    assert "↓ −1\u00a0000\u00a0€" in page  # Продукты 3000 → 2000
+    assert "↑ +200\u00a0€" in page  # Кафе 500 → 700
     assert "в прошлом месяце не было" in page  # Техника
 
 

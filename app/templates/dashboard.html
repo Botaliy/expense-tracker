@@ -12,7 +12,7 @@
     .hero-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     /* Hero figure: proportional digits read tighter at display size. */
     .hero { font-size: 48px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; margin: 8px 0 4px; }
-    .hero .kop { font-size: 28px; }
+    .hero .cents { font-size: 28px; }
     .hero-sub { color: var(--muted); font-size: 13px; }
 
     /* ---------- months chart: one series, selected month in the accent ---------- */
@@ -48,7 +48,7 @@
         opacity: 0; transition: opacity .12s ease;
     }
     .tip b { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
-    .tip .kop { color: inherit; opacity: .7; }
+    .tip .cents { color: inherit; opacity: .7; }
     .col:first-child .tip { left: 0; transform: translate(0, -10px); }
     .col:last-child .tip { left: auto; right: 0; transform: translate(0, -10px); }
     .col:hover .tip, .col:focus-visible .tip { opacity: 1; }
@@ -125,7 +125,7 @@
     <section class="panel" aria-labelledby="months-title">
         <div class="panel-head">
             <h2 id="months-title">По месяцам</h2>
-            <span class="muted">₽, нажми на месяц</span>
+            <span class="muted">{{ currency_symbol }}, нажми на месяц</span>
         </div>
         <div class="chart">
             <div class="y-axis" aria-hidden="true">

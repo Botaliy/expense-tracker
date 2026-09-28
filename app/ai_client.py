@@ -30,7 +30,7 @@ EXTRACT_TOOL = {
             },
             "currency": {
                 "type": "string",
-                "description": "Currency code or symbol as shown on the receipt (e.g. RUB, USD, EUR).",
+                "description": "Currency code or symbol as shown on the receipt (e.g. EUR, USD, GBP).",
             },
             "total_amount": {"type": "number", "description": "Total amount paid, if visible."},
             "items": {

@@ -14,7 +14,7 @@ def _fake_extraction():
     return ExtractedReceipt(
         store_name="Пятёрочка",
         purchase_date="2026-08-10",
-        currency="RUB",
+        currency="EUR",
         total_amount=350.0,
         items=[
             ExtractedLineItem(description="Молоко", amount=90.0, category="Продукты"),
@@ -393,5 +393,5 @@ def test_detail_page_shows_category_split(logged_in_client):
     receipt_id = _upload(logged_in_client, _fake_extraction())
     page = logged_in_client.get(f"/receipts/{receipt_id}").text
     assert "3 позиции" in page
-    assert "150 ₽" in page  # Продукты: 90 + 60
+    assert "150 €" in page  # Продукты: 90 + 60
     assert 'href="/?month=2026-08#r-' in page

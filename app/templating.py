@@ -9,7 +9,9 @@ from app.stats import MONTHS_GENITIVE
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 
-RUBLE_ALIASES = {"RUB", "RUR", "РУБ", "РУБ.", "Р", "Р.", "₽"}
+# All spending is in euros; a receipt in another currency shows its own code.
+CURRENCY_SYMBOL = "€"
+CURRENCY_ALIASES = {"EUR", "EURO", "EUROS", "€"}
 WEEKDAYS_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 
@@ -17,17 +19,24 @@ def _group_thousands(value: int) -> str:
     return f"{value:,}".replace(",", " ")
 
 
+def currency_label(currency: str | None) -> str:
+    """``€`` for euros (or unknown), otherwise the receipt's own code: ``USD``."""
+    if not currency or currency.strip().upper() in CURRENCY_ALIASES:
+        return CURRENCY_SYMBOL
+    return currency.strip()
+
+
 def money(value: float | None, currency: str | None = None) -> Markup:
-    """``1890`` → ``1 890 ₽``, ``2315.4`` → ``2 315,40 ₽`` (kopecks dimmed)."""
+    """``1890`` → ``1 890 €``, ``2315.4`` → ``2 315,40 €`` (cents dimmed)."""
     if value is None:
         return Markup("—")
-    symbol = "₽" if not currency or currency.strip().upper() in RUBLE_ALIASES else currency
+    symbol = currency_label(currency)
     sign = "−" if value < 0 else ""
     cents = round(abs(value) * 100)
     whole, frac = divmod(cents, 100)
     text = sign + _group_thousands(whole)
     if frac:
-        text += Markup('<span class="kop">,{:02d}</span>').format(frac)
+        text += Markup('<span class="cents">,{:02d}</span>').format(frac)
     return Markup("{} {}").format(Markup(text), symbol)
 
 
@@ -81,6 +90,7 @@ def cat_color(category: str) -> str:
 
 templates.env.filters.update(
     money=money,
+    currency_label=currency_label,
     plain_amount=plain_amount,
     compact_number=compact_number,
     short_date=short_date,
@@ -88,4 +98,4 @@ templates.env.filters.update(
     cat_emoji=cat_emoji,
     cat_color=cat_color,
 )
-templates.env.globals.update(plural=plural)
+templates.env.globals.update(plural=plural, currency_symbol=CURRENCY_SYMBOL)

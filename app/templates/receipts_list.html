@@ -7,7 +7,7 @@
     .summary { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px 18px 16px; }
     .summary-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .total { font-size: 40px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin: 6px 0 2px; }
-    .total .kop { font-size: 24px; }
+    .total .cents { font-size: 24px; }
     .summary .sub { color: var(--muted); font-size: 13px; }
     .catbar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; gap: 2px; margin: 14px 0 10px; background: var(--surface-2); }
     .catbar span { display: block; height: 100%; }
@@ -227,9 +227,9 @@
         <h2 id="manual-title">Новая трата</h2>
         <div class="amount-field">
             <input name="amount" id="m-amount" inputmode="decimal" autocomplete="off" placeholder="0"
-                   required pattern="\s*\d[\d\s]*([.,]\d{1,2})?\s*" aria-label="Сумма, ₽"
+                   required pattern="\s*\d[\d\s]*([.,]\d{1,2})?\s*" aria-label="Сумма, {{ currency_symbol }}"
                    title="Например, 450 или 199,90">
-            <span>₽</span>
+            <span>{{ currency_symbol }}</span>
         </div>
 
         <label for="m-desc">На что</label>

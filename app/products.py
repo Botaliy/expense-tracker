@@ -13,7 +13,7 @@ import re
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import LineItem
+from app.models import LineItem, Receipt
 
 MAX_PRODUCT_LENGTH = 64
 # How much of the vocabulary goes into a prompt: the most used labels are the
@@ -56,3 +56,22 @@ def vocabulary_prompt(products: list[str]) -> str:
     if not products:
         return "Known products: none yet."
     return "Known products (reuse when they fit): " + ", ".join(products) + "."
+
+
+def known_stores(db: Session, limit: int = 50) -> list[str]:
+    """Shop names already used, most visited first, so new receipts reuse the spelling."""
+    return list(
+        db.scalars(
+            select(Receipt.store_name)
+            .where(Receipt.store_name.is_not(None), Receipt.image_path.is_not(None))
+            .group_by(Receipt.store_name)
+            .order_by(func.count().desc(), Receipt.store_name)
+            .limit(limit)
+        )
+    )
+
+
+def stores_prompt(stores: list[str]) -> str:
+    if not stores:
+        return "Known shops: none yet."
+    return "Known shops (use the same spelling if it's one of these): " + ", ".join(stores) + "."

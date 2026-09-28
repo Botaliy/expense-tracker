@@ -15,7 +15,7 @@ from app.categories import (
 )
 from app import usage
 from app.config import get_settings
-from app.products import PRODUCT_GUIDANCE, normalize_product, vocabulary_prompt
+from app.products import PRODUCT_GUIDANCE, normalize_product, stores_prompt, vocabulary_prompt
 from app.schemas import ExtractedReceipt
 
 EXTRACT_TOOL_NAME = "record_receipt"
@@ -26,10 +26,14 @@ EXTRACT_TOOL = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "store_name": {"type": "string", "description": "Name of the store/merchant, if visible."},
+            "store_name": {
+                "type": "string",
+                "description": "Shop brand as customers know it ('Alphamega', 'Mas Supermarkets'), "
+                "not the legal entity, address or document title.",
+            },
             "purchase_date": {
                 "type": "string",
-                "description": "Date of purchase in ISO 8601 (YYYY-MM-DD), if visible.",
+                "description": "Date of purchase in ISO 8601 (YYYY-MM-DD). Omit if no date is printed.",
             },
             "currency": {
                 "type": "string",
@@ -42,7 +46,10 @@ EXTRACT_TOOL = {
                     "type": "object",
                     "properties": {
                         "description": {"type": "string"},
-                        "amount": {"type": "number", "description": "Line total for this item."},
+                        "amount": {
+                            "type": "number",
+                            "description": "What was paid for this line: after any line discount, VAT included.",
+                        },
                         "quantity": {"type": "number"},
                         "category": {
                             "type": "string",
@@ -70,7 +77,19 @@ PROMPT = (
     f"{PRODUCT_GUIDANCE} "
     "If you can't confidently split into line items, return a single item summarizing "
     "the whole receipt. Use the record_receipt tool to report the result. "
-    "Amounts should be plain numbers without currency symbols."
+    "Amounts should be plain numbers without currency symbols. "
+    # Each rule below fixes a mistake seen on real receipts (Cyprus, Greek/English).
+    "Receipts are European: dates are written day first (08/09/2026 is 8 September "
+    "2026, never 9 August). Only use a date that is printed as a date; cash register, "
+    "terminal or transaction numbers are not dates — omit the date rather than guess. "
+    "When a line has a discount (e.g. 'FROM 2.60 TO 2.39' or a following '-0.21' line "
+    "for that item), record the discounted amount on the item itself. "
+    "Amounts are what the customer paid, VAT included; if a receipt lists net prices "
+    "before VAT, use the VAT-inclusive total. "
+    "Copy each item's text as printed (keep Greek as Greek); don't translate or reword "
+    "it — the product field is where the meaning goes. Keep prices on the line they "
+    "belong to; check that the items add up to the printed total. "
+    "Skip zero-price modifier lines like 'No cutlery'."
 )
 
 
@@ -177,7 +196,10 @@ def _encode_image(image_path: Path) -> tuple[str, str]:
 
 
 def extract_receipt_data(
-    image_path: Path, known: list[str] | None = None, receipt_id: int | None = None
+    image_path: Path,
+    known: list[str] | None = None,
+    receipt_id: int | None = None,
+    stores: list[str] | None = None,
 ) -> ExtractedReceipt:
     settings = get_settings()
     if not settings.anthropic_api_key:
@@ -200,7 +222,7 @@ def extract_receipt_data(
                             "type": "image",
                             "source": {"type": "base64", "media_type": media_type, "data": data},
                         },
-                        {"type": "text", "text": f"{PROMPT}\n\n{vocabulary_prompt(known or [])}"},
+                        {"type": "text", "text": f"{PROMPT}\n\n{vocabulary_prompt(known or [])}\n\n{stores_prompt(stores or [])}"},
                     ],
                 }
             ],

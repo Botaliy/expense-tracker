@@ -8,7 +8,7 @@ from app.ai_client import ReceiptExtractionError, extract_receipt_data
 from app.categories import normalize_category
 from app.config import get_settings
 from app.models import LineItem, Receipt, ReceiptStatus
-from app.products import known_products, normalize_product
+from app.products import known_products, known_stores, normalize_product
 from app.schemas import ExtractedReceipt
 
 
@@ -94,7 +94,7 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
     settings = get_settings()
     image_path = settings.upload_path / receipt.image_path
     try:
-        extracted = extract_receipt_data(image_path, known_products(db), receipt.id)
+        extracted = extract_receipt_data(image_path, known_products(db), receipt.id, known_stores(db))
     except ReceiptExtractionError as exc:
         receipt.status = ReceiptStatus.FAILED
         receipt.error_message = str(exc)

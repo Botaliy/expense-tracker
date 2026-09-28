@@ -202,3 +202,29 @@ def test_label_products_keeps_order_and_skips_missing(monkeypatch):
     get_settings.cache_clear()
 
     assert labels == ["coffee beans", None, "beer"]
+
+
+def test_renamed_category_still_maps():
+    from app.categories import CATEGORIES, normalize_category
+
+    assert normalize_category("Алкоголь") == "Алкоголь/табак"
+    assert normalize_category(" Алкоголь/табак ") == "Алкоголь/табак"
+    assert "Дом" in CATEGORIES and "Алкоголь" not in CATEGORIES
+
+
+def test_known_stores_are_sent_with_receipts(logged_in_client):
+    from app.database import SessionLocal
+    from app.models import Receipt, ReceiptStatus
+    from app.products import known_stores
+
+    with SessionLocal() as db:
+        for store in ("Alphamega", "Alphamega", "Mas Supermarkets"):
+            db.add(Receipt(store_name=store, image_path="x.jpg", status=ReceiptStatus.PROCESSED))
+        db.add(Receipt(store_name="Такси", image_path=None, status=ReceiptStatus.PROCESSED))  # manual: not a shop
+        db.commit()
+        assert known_stores(db) == ["Alphamega", "Mas Supermarkets"]
+
+    extraction = ExtractedReceipt(items=[ExtractedLineItem(description="x", amount=1, category="Прочее")])
+    with patch("app.receipts.extract_receipt_data", return_value=extraction) as extract:
+        logged_in_client.post("/receipts", files={"file": ("r.jpg", io.BytesIO(b"x"), "image/jpeg")})
+    assert extract.call_args.args[3] == ["Alphamega", "Mas Supermarkets"]

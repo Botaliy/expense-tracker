@@ -12,6 +12,7 @@ from app.receipts import fail_interrupted_receipts
 from app.routers import (
     auth,
     bank,
+    budgets,
     dashboard,
     forecast,
     more,
@@ -52,3 +53,4 @@ app.include_router(usage.router)
 app.include_router(forecast.router)
 app.include_router(more.router)
 app.include_router(bank.router)
+app.include_router(budgets.router)

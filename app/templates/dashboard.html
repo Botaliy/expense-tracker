@@ -144,6 +144,24 @@
         {% endif %}
     </section>
 
+    {% if budget_alerts %}
+    <section class="panel" aria-labelledby="alerts-title">
+        <div class="panel-head"><h2 id="alerts-title">Обрати внимание</h2></div>
+        {% for b in budget_alerts %}
+        <a class="list-row" href="/budgets" style="color: inherit; text-decoration: none">
+            <div style="min-width:0">
+                <div class="t">{{ b.category|cat_icon }} {{ b.category }}</div>
+                <div class="m">
+                    {% if b.status == 'over' %}лимит {{ b.limit|money }} уже превышен на {{ (-b.left)|money }}
+                    {% else %}{{ b.spent|money }} из {{ b.limit|money }}, при таком темпе ~{{ b.projected|round|int|money }} к концу месяца{% endif %}
+                </div>
+            </div>
+            <span class="pill {{ 'bad' if b.status == 'over' else '' }}">{{ (b.share * 100)|round|int }}%</span>
+        </a>
+        {% endfor %}
+    </section>
+    {% endif %}
+
     {% if shopping is not none %}
     <section class="panel" aria-labelledby="shopping-title">
         <div class="panel-head">

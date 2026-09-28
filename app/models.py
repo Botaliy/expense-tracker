@@ -144,3 +144,13 @@ class BankTransaction(Base):
     imported_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC)
     )
+
+
+class Budget(Base):
+    """Monthly spending limit for one category. See app.budgets."""
+
+    __tablename__ = "budgets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category: Mapped[str] = mapped_column(String(64), unique=True)
+    monthly_limit: Mapped[float] = mapped_column(Float)

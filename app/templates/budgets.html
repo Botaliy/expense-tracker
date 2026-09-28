@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Бюджеты{% endblock %}
+{% block head %}
+<style>
+    .sum { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .sum b { font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+    .b-row { padding: 12px 0; border-top: 1px solid var(--line); }
+    .b-row:first-of-type { border-top: 0; }
+    .b-head { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .b-head .ico {
+        width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 18px;
+        background: color-mix(in srgb, var(--c) 16%, var(--surface));
+    }
+    .b-head .t { font-weight: 600; }
+    .b-head .m { font-size: 13px; color: var(--muted); }
+    .b-head .a { font-weight: 700; white-space: nowrap; text-align: right; }
+    .b-bar { position: relative; height: 8px; border-radius: 99px; background: var(--surface-2); margin: 10px 0 6px 48px; }
+    .b-bar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--accent); min-width: 4px; }
+    .b-row.risk .fill { background: #e8a200; }
+    .b-row.over .fill { background: var(--danger); }
+    .b-bar .pace { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 2px; background: var(--text); opacity: .55; }
+    .b-meta { margin-left: 48px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+    .b-edit { margin: 8px 0 0 48px; }
+    .b-edit summary { cursor: pointer; font-size: 12px; color: var(--muted); list-style: none; }
+    .b-edit summary::-webkit-details-marker { display: none; }
+    .b-edit form, .set-form { display: flex; gap: 8px; margin-top: 8px; }
+    .b-edit input, .set-form input { width: 8rem; padding: 6px 10px; }
+    .legend-note { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+    .legend-note i { width: 2px; height: 14px; background: var(--text); opacity: .55; border-radius: 2px; display: inline-block; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="sub-page">
+    <a class="back" href="/more">‹ Ещё</a>
+
+    <section class="panel">
+        <h2>Бюджеты · {{ month_name }}</h2>
+        {% if r.budgeted %}
+        <div class="sum" style="margin: 8px 0 4px">
+            <b class="num">{{ r.total_spent|money }}</b>
+            <span class="muted">из {{ r.total_limit|money }} · день {{ r.day }} из {{ r.days_in_month }}</span>
+        </div>
+        {% if r.alerts %}
+        <p class="lead" style="margin:0; color: var(--danger)">
+            {% for b in r.alerts %}{{ b.category }}{{ ' — уже больше лимита' if b.status == 'over' else ' — при таком темпе выйдет за лимит' }}{{ '; ' if not loop.last }}{% endfor %}
+        </p>
+        {% else %}
+        <p class="lead" style="margin:0">Пока всё в рамках.</p>
+        {% endif %}
+        {% else %}
+        <p class="lead" style="margin:0">
+            Поставь месячный лимит на категории, за которыми хочешь следить. Здесь будет видно,
+            сколько осталось и укладываешься ли ты в темп месяца.
+        </p>
+        {% endif %}
+    </section>
+
+    {% if r.budgeted %}
+    <section class="panel">
+        {% for b in r.budgeted %}
+        <div class="b-row {{ b.status }}">
+            <div class="b-head">
+                <span class="ico" style="--c: {{ b.category|cat_color }}" aria-hidden="true">{{ b.category|cat_icon }}</span>
+                <div style="min-width:0">
+                    <div class="t">{{ b.category }}</div>
+                    <div class="m">
+                        {% if b.status == 'over' %}перерасход {{ (-b.left)|money }}
+                        {% else %}осталось {{ b.left|money }}{% endif %}
+                    </div>
+                </div>
+                <div class="a num">{{ b.spent|money }}<div class="m" style="font-weight:500">из {{ b.limit|money }}</div></div>
+            </div>
+            <div class="b-bar" role="img" aria-label="Потрачено {{ (b.share * 100)|round|int }}% лимита, прошло {{ (r.month_share * 100)|round|int }}% месяца">
+                <span class="fill" style="width: {{ [b.share, 1]|min * 100 }}%"></span>
+                <span class="pace" style="left: {{ r.month_share * 100 }}%"></span>
+            </div>
+            <div class="b-meta">
+                <span>{{ (b.share * 100)|round|int }}% лимита</span>
+                {% if b.projected is not none %}<span>к концу месяца ~{{ b.projected|round|int|money }}</span>{% endif %}
+            </div>
+            <details class="b-edit">
+                <summary>изменить лимит</summary>
+                <form method="post" action="/budgets">
+                    <input type="hidden" name="category" value="{{ b.category }}">
+                    <input type="text" name="limit" inputmode="decimal" value="{{ b.limit|plain_amount }}" aria-label="Лимит, {{ currency_symbol }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">Сохранить</button>
+                    <button type="submit" name="limit" value="" class="btn btn-ghost btn-sm">Убрать</button>
+                </form>
+            </details>
+        </div>
+        {% endfor %}
+        <div class="legend-note"><i></i> сколько месяца уже прошло: если полоска правее, тратишь быстрее темпа</div>
+    </section>
+    {% endif %}
+
+    {% if r.unbudgeted %}
+    <section class="panel">
+        <h2>Без лимита</h2>
+        <p class="lead">Подсказка: среднее за последние 3 месяца, округлённое вверх.</p>
+        {% for b in r.unbudgeted %}
+        <div class="list-row">
+            <div style="min-width:0">
+                <div class="t">{{ b.category|cat_icon }} {{ b.category }}</div>
+                <div class="m">в этом месяце {{ b.spent|money }} · в среднем {{ b.average|round|int|money }}</div>
+            </div>
+            <form method="post" action="/budgets" class="set-form" style="margin:0">
+                <input type="hidden" name="category" value="{{ b.category }}">
+                <input type="text" name="limit" inputmode="decimal" value="{{ b.suggested|plain_amount if b.suggested else '' }}" placeholder="лимит" aria-label="Лимит для {{ b.category }}" required>
+                <button type="submit" class="btn btn-secondary btn-sm">Задать</button>
+            </form>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+</main>
+{% endblock %}

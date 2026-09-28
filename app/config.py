@@ -26,11 +26,6 @@ class Settings(BaseSettings):
     # aren't affected: those come from the receipt itself.
     timezone: str = "UTC"
 
-    # Daily database backup to Telegram (app.backup); off unless both are set.
-    telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
-    backup_hour: int = 4  # local time, see ``timezone``
-
     db_path: str = "data/expenses.db"
     upload_dir: str = "uploads"
 

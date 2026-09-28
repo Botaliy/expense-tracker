@@ -20,7 +20,6 @@
 - **Регулярные платежи** — аренда, связь, подписки; напоминание, если в этом месяце платежа не видно.
 - **Список покупок** — сам подтягивает то, что скоро закончится, плюс свои пункты.
 - **Спросить** — вопрос о тратах обычными словами; Claude сам пишет SQL (только чтение).
-- **Бэкап базы** — раз в сутки в Telegram.
 
 ## Стек
 
@@ -73,15 +72,3 @@ docker run -d --name expense-tracker \
 ```
 
 Дальше — Nginx/Caddy как reverse proxy с TLS перед контейнером (по желанию).
-
-С `docker compose` (см. `deploy.sh`) рядом с приложением запускается сервис `backup` — на том же
-образе, без лишних зависимостей. Он раз в сутки (в `BACKUP_HOUR` по `TIMEZONE`) шлёт сжатую копию
-базы в Telegram. Настройка:
-
-1. В Telegram: @BotFather → `/newbot`, получишь токен → `TELEGRAM_BOT_TOKEN`.
-2. Напиши своему боту что угодно, открой `https://api.telegram.org/bot<TOKEN>/getUpdates`
-   и возьми `message.chat.id` → `TELEGRAM_CHAT_ID`.
-3. Проверить сразу: `docker compose run --rm backup uv run --no-sync python -m app.backup --once`.
-
-Восстановление: `gunzip expenses-YYYY-MM-DD.db.gz` и положить файл как `data/expenses.db`.
-Фото чеков в бэкап не входят (они большие, а всё, что показывает приложение, лежит в базе).

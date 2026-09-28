@@ -97,11 +97,11 @@
     .amount-field span { font-size: 26px; font-weight: 700; color: var(--muted); }
     .sheet input[type=text], .sheet input[type=date] { margin-bottom: 14px; padding: 12px; }
     .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
-    .chips.wrap { flex-wrap: wrap; overflow: visible; }
+    .chips.wrap { flex-wrap: wrap; overflow: visible; gap: 6px; }
     .chip { flex: none; position: relative; margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; }
     .chip input { position: absolute; opacity: 0; pointer-events: none; }
     .chip span {
-        display: block; border: 1px solid var(--line); background: var(--surface); border-radius: 99px;
+        display: flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); border-radius: 99px;
         padding: 7px 12px; white-space: nowrap;
     }
     .chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -199,8 +199,8 @@
                 {% set main_cat = e.categories[0] if e.categories else 'Прочее' %}
                 <a class="row" id="r-{{ r.id }}" href="/receipts/{{ r.id }}">
                     <div class="ico" style="--c: {{ main_cat|cat_color }}">
-                        {{ main_cat|cat_emoji }}
-                        {% if e.categories|length > 1 %}<span class="stack">{{ e.categories[1]|cat_emoji }}</span>{% endif %}
+                        {{ main_cat|cat_icon }}
+                        {% if e.categories|length > 1 %}<span class="stack">{{ e.categories[1]|cat_icon }}</span>{% endif %}
                     </div>
                     <div style="min-width:0">
                         <div class="title">{{ e.title }}</div>
@@ -236,15 +236,16 @@
         <input type="text" name="description" id="m-desc" placeholder="Например, такси до работы" autocomplete="off" required>
 
         <label id="m-cat-label">Категория</label>
-        <div class="chips" role="radiogroup" aria-labelledby="m-cat-label">
+        <div class="chips wrap" role="radiogroup" aria-labelledby="m-cat-label">
             <label class="chip"><input type="radio" name="category" value="" id="m-cat-auto" checked><span>✨ Подберёт Claude</span></label>
             {% for c in categories %}
-            <label class="chip"><input type="radio" name="category" value="{{ c }}"><span>{{ c|cat_emoji }} {{ c }}</span></label>
+            <label class="chip"><input type="radio" name="category" value="{{ c }}"><span>{{ c|cat_icon }}{{ c }}</span></label>
             {% endfor %}
         </div>
         <div class="ai-hint" id="m-hint" aria-live="polite"></div>
 
         <label id="m-day-label">Когда</label>
+        <input type="hidden" name="product" id="m-product" value="">
         <input type="hidden" name="purchase_date" id="m-date" value="{{ quick_days[0].isoformat() }}">
         <div class="chips wrap" role="radiogroup" aria-labelledby="m-day-label">
             {% for d in quick_days %}
@@ -300,17 +301,30 @@
         if (e.target === sheet) sheet.close();
     });
 
-    // While "✨ Подберёт Claude" is selected, ask for a suggestion once the user
-    // stops typing, and send it as the category so the server needn't ask again.
-    var timer = null, requestSeq = 0;
+    // Once the user stops typing, ask Claude for the category and the product
+    // name (the English label search works on). Both go back with the form, so
+    // saving needs no second model call. The category only applies while
+    // "✨ Подберёт Claude" is selected; the product is always kept.
+    var productField = document.getElementById('m-product');
+    var timer = null, requestSeq = 0, suggested = null;
+    function showHint() {
+        if (!suggested) return;
+        var parts = [];
+        if (autoCat.checked) parts.push('категория: ' + suggested.category);
+        if (suggested.product) parts.push('товар: ' + suggested.product);
+        hint.textContent = parts.length ? 'Claude: ' + parts.join(' · ') : '';
+    }
     function suggest() {
         clearTimeout(timer);
+        requestSeq++;
+        suggested = null;
         autoCat.value = '';
+        productField.value = '';
         hint.textContent = '';
-        if (!autoCat.checked || !desc.value.trim()) return;
+        if (!desc.value.trim()) return;
         timer = setTimeout(async function () {
             var mySeq = ++requestSeq;
-            hint.textContent = 'Claude подбирает категорию…';
+            hint.textContent = 'Claude подбирает категорию и товар…';
             try {
                 var body = new FormData();
                 body.append('description', desc.value);
@@ -320,21 +334,21 @@
                 var data = await resp.json();
                 if (mySeq !== requestSeq) return;
                 if (resp.ok && data.category) {
+                    suggested = data;
                     autoCat.value = data.category;
-                    hint.textContent = 'Claude выберет: ' + data.category;
+                    productField.value = data.product || '';
+                    showHint();
                 } else {
                     hint.textContent = 'Не удалось подобрать сейчас, попробуем при сохранении';
                 }
             } catch (err) {
-                if (mySeq === requestSeq) hint.textContent = 'Нет связи, категорию подберём при сохранении';
+                if (mySeq === requestSeq) hint.textContent = 'Нет связи, подберём при сохранении';
             }
         }, 700);
     }
     desc.addEventListener('input', suggest);
     document.querySelectorAll('input[name=category]').forEach(function (r) {
-        r.addEventListener('change', function () {
-            if (autoCat.checked) suggest(); else { clearTimeout(timer); requestSeq++; hint.textContent = ''; }
-        });
+        r.addEventListener('change', showHint);
     });
 
     document.querySelectorAll('input[name=day]').forEach(function (r) {

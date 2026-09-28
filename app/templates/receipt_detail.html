@@ -87,15 +87,20 @@
     }
     .item .del:hover { background: var(--danger-soft); color: var(--danger); }
     .item .del svg { width: 16px; height: 16px; }
+    /* Product name: the unified label search works on ("coffee beans"). */
+    .item .prod-wrap { grid-column: 2 / 5; grid-row: 2; display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .item .prod-wrap svg { width: 13px; height: 13px; flex: none; color: var(--accent); }
+    .detail .item .prod { font-size: 13px; color: var(--accent); padding-block: 1px; margin-block: 0; }
+    .detail .item .prod::placeholder { color: var(--muted); }
     .item .cat {
-        grid-column: 2; grid-row: 2;
+        grid-column: 2; grid-row: 3;
         width: auto; max-width: 100%; justify-self: start; font-size: 13px; padding: 3px 26px 3px 8px; border-radius: 99px;
         border: 1px solid var(--line); background-color: var(--surface); color: var(--muted);
     }
-    .item .qty-wrap { grid-column: 3; grid-row: 2; }
+    .item .qty-wrap { grid-column: 3; grid-row: 3; }
     .item .qty-wrap, .item .amt-wrap { display: flex; align-items: baseline; gap: 2px; color: var(--muted); font-size: 13px; }
     .item .qty { text-align: right; font-size: 13px; color: var(--muted); padding-inline: 4px; margin: 0; }
-    .item .amt-wrap { grid-column: 4; grid-row: 2; justify-self: end; color: var(--text); font-weight: 700; }
+    .item .amt-wrap { grid-column: 4; grid-row: 3; justify-self: end; color: var(--text); font-weight: 700; }
     .item .amt { width: 7ch; text-align: right; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; margin: 0; padding-inline: 4px; }
     .item .amt-wrap span { color: var(--muted); }
 
@@ -164,7 +169,7 @@
             </div>
             <div class="legend">
                 {% for cat, amount in by_category %}
-                <span>{{ cat|cat_emoji }} {{ cat }} <b class="num">{{ amount|money(r.currency) }}</b></span>
+                <span>{{ cat|cat_icon }} {{ cat }} <b class="num">{{ amount|money(r.currency) }}</b></span>
                 {% endfor %}
             </div>
             {% endif %}
@@ -210,12 +215,18 @@
         <div class="item-list">
             {% for item in r.items %}
             <div class="item" id="item-{{ item.id }}">
-                <span class="ico" id="ico-{{ item.id }}" style="--c: {{ item.category|cat_color }}">{{ item.category|cat_emoji }}</span>
+                <span class="ico" id="ico-{{ item.id }}" style="--c: {{ item.category|cat_color }}">{{ item.category|cat_icon }}</span>
                 <form method="post" action="/receipts/{{ r.id }}/items/{{ item.id }}"
                       hx-post="/receipts/{{ r.id }}/items/{{ item.id }}" hx-trigger="change, submit"
                       hx-swap="none" hx-select-oob="#receipt-summary,#ico-{{ item.id }}">
                     <input class="bare desc" type="text" name="description" value="{{ item.description }}"
                            required aria-label="Название позиции" autocomplete="off">
+                    <label class="prod-wrap" style="margin:0; text-transform:none; letter-spacing:0; font-weight:500;"
+                           title="Название товара для поиска: одно и то же для всех чеков, по-английски">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/></svg>
+                        <input class="bare prod" type="text" name="product" value="{{ item.product or '' }}"
+                               list="known-products" placeholder="товар для поиска" aria-label="Товар для поиска" autocomplete="off">
+                    </label>
                     <select class="cat" name="category" aria-label="Категория">
                         {% for c in categories %}
                         <option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c|cat_emoji }} {{ c }}</option>
@@ -271,6 +282,10 @@
         </form>
     </div>
 </main>
+
+<datalist id="known-products">
+    {% for p in known_products %}<option value="{{ p }}"></option>{% endfor %}
+</datalist>
 
 {% if r.image_path %}
 <dialog class="lightbox" id="lightbox" aria-label="Фото чека">

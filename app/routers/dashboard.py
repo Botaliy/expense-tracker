@@ -19,6 +19,7 @@ from app.stats import (
     top_places,
 )
 from app.templating import templates
+from app.usage import current_month_usage
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -72,6 +73,7 @@ def dashboard(
             "forecast": month_forecast(db, year, mon, summary["total"]),
             "top_items": top_items(db, start, end),
             "top_places": top_places(db, start, end),
+            "api_usage": current_month_usage(db),
             "months": months,
             "ticks": ticks,
             "axis_max": ticks[-1] or 1,

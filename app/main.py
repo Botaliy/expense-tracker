@@ -8,7 +8,7 @@ from app.config import get_settings
 from app import database
 from app.database import init_db
 from app.receipts import fail_interrupted_receipts
-from app.routers import auth, dashboard, receipts, search
+from app.routers import auth, dashboard, receipts, search, usage
 
 settings = get_settings()
 
@@ -30,3 +30,4 @@ app.include_router(auth.router)
 app.include_router(receipts.router)
 app.include_router(dashboard.router)
 app.include_router(search.router)
+app.include_router(usage.router)

@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     auth_password_hash: str = ""
     secret_key: str = "change-me"
 
+    # For showing stored UTC times, e.g. "Europe/Berlin". Dates of purchases
+    # aren't affected: those come from the receipt itself.
+    timezone: str = "UTC"
+
     db_path: str = "data/expenses.db"
     upload_dir: str = "uploads"
 

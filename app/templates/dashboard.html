@@ -51,6 +51,11 @@
     .place-bar { height: 4px; border-radius: 99px; background: var(--surface-2); margin-top: 5px; }
     .place-bar span { display: block; height: 100%; border-radius: 99px; background: var(--accent); min-width: 4px; }
 
+    .usage-link { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: inherit; padding-block: 14px; }
+    .usage-link:hover { background: var(--surface-2); }
+    .usage-link b { margin-right: 6px; }
+    .usage-cost { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
     /* ---------- categories ---------- */
     .cats { display: flex; flex-direction: column; }
     .cat + .cat { border-top: 1px solid var(--line); }
@@ -163,7 +168,7 @@
             {% set diff = amount - prev %}
             <details class="cat">
                 <summary>
-                    <span class="ico" style="--c: {{ cat|cat_color }}" aria-hidden="true">{{ cat|cat_emoji }}</span>
+                    <span class="ico" style="--c: {{ cat|cat_color }}" aria-hidden="true">{{ cat|cat_icon }}</span>
                     <div>
                         <div class="cat-line"><span class="name">{{ cat }}</span><span class="amt">{{ amount|money }}</span></div>
                         <div class="cat-bar"><span style="width: {{ (amount / max_amount * 100) if max_amount > 0 else 0 }}%"></span></div>
@@ -202,7 +207,7 @@
         <div class="top-list">
             {% for it in top_items %}
             <a class="top-row" href="/receipts/{{ it.receipt_id }}">
-                <span class="ico" style="--c: {{ it.category|cat_color }}" aria-hidden="true">{{ it.category|cat_emoji }}</span>
+                <span class="ico" style="--c: {{ it.category|cat_color }}" aria-hidden="true">{{ it.category|cat_icon }}</span>
                 <div style="min-width:0">
                     <div class="t">{{ it.description }}</div>
                     <div class="m">{% if it.store_name %}{{ it.store_name }} · {% endif %}{{ it.day|human_date }}</div>
@@ -233,5 +238,13 @@
         </div>
     </section>
     {% endif %}
+
+    <a class="panel usage-link" href="/usage">
+        <span>
+            <b>Claude</b>
+            <span class="muted">{{ plural(api_usage.calls, 'запрос', 'запроса', 'запросов') }} в этом месяце</span>
+        </span>
+        <span class="usage-cost">{{ api_usage.cost|usd }} ›</span>
+    </a>
 </main>
 {% endblock %}

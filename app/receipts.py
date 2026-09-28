@@ -8,6 +8,7 @@ from app.ai_client import ReceiptExtractionError, extract_receipt_data
 from app.categories import normalize_category
 from app.config import get_settings
 from app.models import LineItem, Receipt, ReceiptStatus
+from app.products import known_products, normalize_product
 from app.schemas import ExtractedReceipt
 
 
@@ -65,6 +66,7 @@ def create_manual_expense(
     category: str,
     purchase_date: date | None,
     store_name: str | None = None,
+    product: str | None = None,
 ) -> Receipt:
     """Record an expense entered by hand, with no receipt photo attached."""
     receipt = Receipt(
@@ -79,6 +81,7 @@ def create_manual_expense(
             description=description,
             amount=amount,
             category=normalize_category(category),
+            product=normalize_product(product),
         )
     )
     db.add(receipt)
@@ -91,7 +94,7 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
     settings = get_settings()
     image_path = settings.upload_path / receipt.image_path
     try:
-        extracted = extract_receipt_data(image_path)
+        extracted = extract_receipt_data(image_path, known_products(db), receipt.id)
     except ReceiptExtractionError as exc:
         receipt.status = ReceiptStatus.FAILED
         receipt.error_message = str(exc)
@@ -114,6 +117,7 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
                 amount=item.amount,
                 quantity=item.quantity,
                 category=item.category,
+                product=item.product,
             )
         )
 

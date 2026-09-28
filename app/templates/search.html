@@ -15,12 +15,23 @@
     .search-box .btn { border-radius: 16px; min-width: 56px; }
     .search-box svg { width: 22px; height: 22px; }
 
-    .terms { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .term { background: var(--surface); border-radius: 99px; padding: 2px 10px; box-shadow: 0 0 0 1px var(--line); color: var(--text); }
-    .terms a { color: var(--accent); font-weight: 600; text-decoration: none; }
-    .terms a:hover { text-decoration: underline; }
+    .search-wrap { position: relative; }
+    .suggestions {
+        position: absolute; left: 0; right: 64px; top: calc(100% + 6px); z-index: 4;
+        background: var(--surface); border-radius: 16px; box-shadow: var(--shadow), 0 0 0 1px var(--line);
+        padding: 6px; display: flex; flex-direction: column;
+    }
+    .suggestions:empty { display: none; }
+    .suggestion {
+        display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+        padding: 9px 10px; border-radius: 10px; text-decoration: none; color: inherit;
+    }
+    .suggestion:hover, .suggestion:focus-visible { background: var(--surface-2); outline: none; }
+    .suggestion .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .suggestion .stat { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
     .examples { display: flex; flex-wrap: wrap; gap: 8px; }
+    .examples a span { color: var(--muted); font-size: 12px; margin-left: 4px; }
     .examples a {
         background: var(--surface); border-radius: 99px; padding: 8px 14px; box-shadow: var(--shadow);
         color: var(--text); text-decoration: none; font-weight: 500;
@@ -36,6 +47,8 @@
     @media (max-width: 420px) { .facts { grid-template-columns: 1fr 1fr; } }
 
     .places { display: flex; flex-wrap: wrap; gap: 8px; }
+    a.place { color: inherit; text-decoration: none; }
+    a.place:hover { background: var(--line); }
     .place { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; font-size: 14px; }
     .place b { font-variant-numeric: tabular-nums; }
     .place > span { color: var(--muted); font-size: 12px; }
@@ -52,45 +65,44 @@
     }
     .result .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .result .m { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result .tag { color: var(--accent); font-weight: 500; }
     .result .amt { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .more { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
 </style>
 {% endblock %}
 {% block content %}
 <main class="search-page">
+    <div class="search-wrap">
     <form class="search-box" method="get" action="/search" role="search">
-        <input type="search" name="q" value="{{ query }}" placeholder="Кофе, пиво, Lidl…"
-               aria-label="Что искать" autocomplete="off" {% if not query %}autofocus{% endif %}>
-        {% if exact %}<input type="hidden" name="exact" value="1">{% endif %}
+        <input type="search" name="q" value="{{ query }}" placeholder="coffee, beer, Lidl…"
+               aria-label="Что искать" autocomplete="off" {% if not query %}autofocus{% endif %}
+               role="combobox" aria-controls="suggestions" aria-autocomplete="list"
+               hx-get="/search/suggest" hx-trigger="input changed delay:150ms, focus" hx-target="#suggestions">
         <button type="submit" class="btn btn-primary" aria-label="Найти">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         </button>
     </form>
+    <div class="suggestions" id="suggestions" role="listbox" aria-label="Из твоих чеков"></div>
+    </div>
 
     {% if not query %}
     <p class="hint">
-        Ищет по названиям позиций в чеках и по магазинам за последние {{ months_count }} месяцев.
-        Запрос можно писать по-русски: Claude добавит перевод и сокращения, как их печатают в чеках.
+        Ищет по названиям позиций и магазинов в твоих чеках за последние {{ months_count }} месяцев.
+        Товары названы одним словом по-английски, независимо от языка чека:
+        coffee, beer, cat food. Подсказки покажут, какие названия уже есть.
     </p>
-    <div class="examples">
-        {% for example in ['кофе', 'пиво', 'хлеб', 'бензин', 'Lidl'] %}
-        <a href="/search?q={{ example|urlencode }}">{{ example }}</a>
-        {% endfor %}
-    </div>
+    {% if often %}
+    <section aria-labelledby="often-title">
+        <p class="hint" id="often-title" style="margin-bottom: 8px">Часто покупаешь</p>
+        <div class="examples">
+            {% for n in often %}
+            <a href="/search?q={{ n.name|urlencode }}">{{ n.name }}<span>{{ n.count }}×</span></a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
     {% else %}
     {% set r = result %}
-
-    <div class="terms">
-        {% if exact %}
-        Точный поиск «{{ query }}». <a href="/search?q={{ query|urlencode }}">Искать с переводом</a>
-        {% elif expansion_failed %}
-        Перевод сейчас недоступен, ищу только «{{ query }}».
-        {% else %}
-        Ищу:
-        {% for t in terms %}<span class="term">{{ t }}</span>{% endfor %}
-        <a href="/search?q={{ query|urlencode }}&amp;exact=1">только «{{ query }}»</a>
-        {% endif %}
-    </div>
 
     {% if r.count %}
     <section class="panel" aria-label="Итог">
@@ -112,6 +124,17 @@
         {% include "_months_chart.html" %}
     </section>
 
+    {% if r.products|length > 1 %}
+    <section class="panel" aria-labelledby="products-title">
+        <h2 id="products-title">Что вошло</h2>
+        <div class="places">
+            {% for p in r.products %}
+            <a class="place" href="/search?q={{ p.name|urlencode }}">{{ p.name }} <b>{{ p.amount|money }}</b> <span>· {{ p.count }}×</span></a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
     {% if r.places %}
     <section class="panel" aria-labelledby="places-title">
         <h2 id="places-title">Где покупаешь</h2>
@@ -128,10 +151,10 @@
         <div class="results">
             {% for m in r.listed %}
             <a class="result" href="/receipts/{{ m.receipt_id }}#item-{{ m.item_id }}">
-                <span class="ico" style="--c: {{ m.category|cat_color }}" aria-hidden="true">{{ m.category|cat_emoji }}</span>
+                <span class="ico" style="--c: {{ m.category|cat_color }}" aria-hidden="true">{{ m.category|cat_icon }}</span>
                 <div style="min-width:0">
                     <div class="t">{{ m.description }}{% if m.quantity and m.quantity != 1 %} × {{ m.quantity|plain_amount }}{% endif %}</div>
-                    <div class="m">{% if m.store_name %}{{ m.store_name }} · {% endif %}{{ m.day|human_date }}{% if not exact and m.matched != query|lower %} · по «{{ m.matched }}»{% endif %}</div>
+                    <div class="m">{% if m.product %}<span class="tag">{{ m.product }}</span> · {% endif %}{% if m.store_name %}{{ m.store_name }} · {% endif %}{{ m.day|human_date }}</div>
                 </div>
                 <span class="amt">{{ m.amount|money(m.currency) }}</span>
             </a>
@@ -144,11 +167,32 @@
     {% else %}
     <div class="panel">
         <p class="hint">
-            За {{ months_count }} месяцев ничего не нашлось.
-            {% if exact %}Попробуйте <a href="/search?q={{ query|urlencode }}">поиск с переводом</a>.{% else %}Попробуйте слово попроще или название магазина.{% endif %}
+            За {{ months_count }} месяцев ничего не нашлось по «{{ query }}».
+            Товары записаны по-английски: попробуй coffee вместо «кофе» или начни печатать и выбери из подсказок.
         </p>
     </div>
     {% endif %}
     {% endif %}
 </main>
+
+<script>
+(function () {
+    var input = document.querySelector('.search-box input[name=q]');
+    var box = document.getElementById('suggestions');
+    function close() { box.innerHTML = ''; }
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('.search-wrap')) close();
+    });
+    document.addEventListener('keydown', function (e) {
+        var links = Array.prototype.slice.call(box.querySelectorAll('a'));
+        if (e.key === 'Escape') { close(); input.focus(); return; }
+        if (!links.length || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+        var i = links.indexOf(document.activeElement);
+        e.preventDefault();
+        if (e.key === 'ArrowDown') links[Math.min(i + 1, links.length - 1)].focus();
+        else if (i <= 0) input.focus();
+        else links[i - 1].focus();
+    });
+})();
+</script>
 {% endblock %}

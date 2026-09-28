@@ -5,7 +5,9 @@
     selected      — month key to highlight and label, or none
     link_base     — columns link to `link_base?month=key`, or none for plain columns
     chart_caption — caption of the screen-reader table
+    chart_usd     — optional: values are dollars (API costs), not spending in euros
 #}
+{% macro amount(v) %}{{ v|usd if chart_usd else v|money }}{% endmacro %}
 {% set grid_cols = 'grid-template-columns: repeat(' ~ months|length ~ ', minmax(0, 1fr))' %}
 <div class="chart">
     <div class="y-axis" aria-hidden="true">
@@ -19,15 +21,15 @@
             {% set tag = 'a' if link_base else 'div' %}
             <{{ tag }} class="col {{ 'on' if m.key == selected else '' }}"
                {% if link_base %}href="{{ link_base }}?month={{ m.key }}"{% else %}tabindex="0"{% endif %}
-               aria-label="{{ m.name }}: {{ m.total|money|striptags }}"{% if m.key == selected %} aria-current="page"{% endif %}>
+               aria-label="{{ m.name }}: {{ amount(m.total)|striptags }}"{% if m.key == selected %} aria-current="page"{% endif %}>
                 <span class="bar" style="height: {{ pct }}%{% if m.total > 0 %}; min-height: 3px{% endif %}"></span>
                 {% if m.key == selected and m.total > 0 %}
-                <span class="cap" style="bottom: {{ pct }}%">{{ m.total|round|money }}</span>
+                <span class="cap" style="bottom: {{ pct }}%">{{ amount(m.total if chart_usd else m.total|round) }}</span>
                 {% endif %}
                 <span class="tip" aria-hidden="true" style="bottom: {{ [pct, 30]|max }}%">
                     {{ m.name }}
-                    <b>{{ m.total|money }}</b>
-                    {% if m.top_category %}больше всего: {{ m.top_category|cat_emoji }} {{ m.top_category }}
+                    <b>{{ amount(m.total) }}</b>
+                    {% if m.top_category %}больше всего: {{ m.top_category|cat_icon }} {{ m.top_category }}
                     {% elif m.count %}{{ plural(m.count, 'покупка', 'покупки', 'покупок') }}{% endif %}
                 </span>
             </{{ tag }}>
@@ -43,7 +45,7 @@
     <caption>{{ chart_caption }}</caption>
     <tbody>
     {% for m in months %}
-        <tr><th scope="row">{{ m.name }}</th><td>{{ m.total|money }}</td></tr>
+        <tr><th scope="row">{{ m.name }}</th><td>{{ amount(m.total) }}</td></tr>
     {% endfor %}
     </tbody>
 </table>

@@ -15,6 +15,9 @@ def client(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("UPLOAD_DIR", str(uploads_dir))
     monkeypatch.setenv("AUTH_USERNAME", "testuser")
     monkeypatch.setenv("SECRET_KEY", "test-secret")
+    # Never reach the real API from tests, even if `.env` holds a real key:
+    # every model call then fails fast, and tests that need a result mock it.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
 
     from app.auth import hash_password
     from app.config import get_settings

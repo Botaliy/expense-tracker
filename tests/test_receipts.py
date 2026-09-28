@@ -2,6 +2,7 @@ import io
 import re
 from unittest.mock import patch
 
+from app.ai_client import ExpenseClassification
 from app.schemas import ExtractedLineItem, ExtractedReceipt
 
 
@@ -198,7 +199,8 @@ def test_add_manual_expense(logged_in_client):
 
 def test_add_manual_expense_auto_categorizes_when_blank(logged_in_client):
     with patch(
-        "app.routers.receipts.categorize_expense", return_value="Транспорт"
+        "app.routers.receipts.classify_expense",
+        return_value=ExpenseClassification("Транспорт", "taxi"),
     ) as mock_cat:
         resp = logged_in_client.post(
             "/expenses",
@@ -215,7 +217,7 @@ def test_add_manual_expense_falls_back_when_ai_unavailable(logged_in_client):
     from app.ai_client import ExpenseCategorizationError
 
     with patch(
-        "app.routers.receipts.categorize_expense",
+        "app.routers.receipts.classify_expense",
         side_effect=ExpenseCategorizationError("no key"),
     ):
         resp = logged_in_client.post(
@@ -230,21 +232,22 @@ def test_add_manual_expense_falls_back_when_ai_unavailable(logged_in_client):
 
 def test_categorize_endpoint_returns_suggestion(logged_in_client):
     with patch(
-        "app.routers.receipts.categorize_expense", return_value="Развлечения"
+        "app.routers.receipts.classify_expense",
+        return_value=ExpenseClassification("Развлечения", "cinema"),
     ):
         resp = logged_in_client.post(
             "/expenses/categorize",
             data={"description": "Билеты в кино", "amount": "600"},
         )
     assert resp.status_code == 200
-    assert resp.json() == {"category": "Развлечения"}
+    assert resp.json() == {"category": "Развлечения", "product": "cinema"}
 
 
 def test_categorize_endpoint_reports_ai_error(logged_in_client):
     from app.ai_client import ExpenseCategorizationError
 
     with patch(
-        "app.routers.receipts.categorize_expense",
+        "app.routers.receipts.classify_expense",
         side_effect=ExpenseCategorizationError("boom"),
     ):
         resp = logged_in_client.post(
@@ -395,3 +398,22 @@ def test_detail_page_shows_category_split(logged_in_client):
     assert "3 позиции" in page
     assert "150 €" in page  # Продукты: 90 + 60
     assert 'href="/?month=2026-08#r-' in page
+
+
+def test_cat_category_uses_drawn_icon_but_emoji_in_selects(logged_in_client):
+    from app.categories import CATEGORIES, CATEGORY_GUIDANCE
+
+    assert "Кошечка" in CATEGORIES
+    assert "'Кошечка'" in CATEGORY_GUIDANCE  # the model knows what goes there
+
+    resp = logged_in_client.post(
+        "/expenses",
+        data={"description": "Корм Whiskas", "amount": "18,50", "category": "Кошечка"},
+        follow_redirects=False,
+    )
+    detail = logged_in_client.get(f"/receipts/{_receipt_id(resp)}").text
+    assert 'class="cat-icon"' in detail
+    assert '<option value="Кошечка" selected>🐈‍⬛ Кошечка</option>' in detail
+
+    home = logged_in_client.get("/").text
+    assert 'class="cat-icon"' in home

@@ -11,6 +11,7 @@ CATEGORIES: list[str] = [
     "Алкоголь",
     "Развлечения",
     "Связь/интернет",
+    "Кошечка",
     "Прочее",
 ]
 
@@ -30,6 +31,7 @@ CATEGORY_STYLE: dict[str, tuple[str, str]] = {
     "Алкоголь": ("🍷", "alco"),
     "Развлечения": ("🎬", "fun"),
     "Связь/интернет": ("📶", "net"),
+    "Кошечка": ("🐈‍⬛", "cat"),
     "Прочее": ("📦", "other"),
 }
 
@@ -45,7 +47,10 @@ CATEGORY_GUIDANCE = (
     "manicure, pedicure, hairdresser/barber — as opposed to 'Здоровье', which is for "
     "medicine, medical services, and health-related purchases. "
     "'Авто' is for car-related expenses: fuel, parking, maintenance, car parts — as opposed "
-    "to 'Транспорт', which is for public/shared transport (taxi, bus, metro, etc.)."
+    "to 'Транспорт', which is for public/shared transport (taxi, bus, metro, etc.). "
+    "'Кошечка' is everything for the household cat: cat food and treats, litter, "
+    "toys, scratching posts, vet visits and pet medicine — it takes priority over "
+    "'Продукты' and 'Здоровье' (e.g. cat food bought at a supermarket is 'Кошечка')."
 )
 
 

@@ -14,12 +14,17 @@ from fastapi import (
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.ai_client import ExpenseCategorizationError, categorize_expense
+from app.ai_client import (
+    ExpenseCategorizationError,
+    ExpenseClassification,
+    classify_expense,
+)
 from app.auth import get_current_user
 from app.categories import CATEGORIES, DEFAULT_CATEGORY
 from app.database import get_db
 from app.feed import month_feed
 from app.models import LineItem, Receipt, ReceiptStatus
+from app.products import known_products, normalize_product
 from app.receipts import (
     create_manual_expense,
     create_receipt,
@@ -83,6 +88,14 @@ def _receipt_day(receipt: Receipt) -> date:
     return receipt.purchase_date or receipt.uploaded_at.date()
 
 
+def _classify(db: Session, description: str, amount: float | None) -> ExpenseClassification | None:
+    """Category + product from the model, or None when it's unavailable."""
+    try:
+        return classify_expense(description, amount, known_products(db))
+    except ExpenseCategorizationError:
+        return None
+
+
 def _home_url(day: date | None, receipt_id: int) -> str:
     """Feed page for the month the receipt landed in, scrolled to its row."""
     day = day or date.today()
@@ -112,13 +125,14 @@ def upload_receipt(
 def categorize_manual_expense(
     description: str = Form(...),
     amount: float | None = Form(default=None),
+    db: Session = Depends(get_db),
 ):
-    """Suggest a category for a hand-entered expense (used by the form's button)."""
+    """Suggest a category and product while the manual-entry form is filled in."""
     try:
-        category = categorize_expense(description, amount)
+        result = classify_expense(description, amount, known_products(db))
     except ExpenseCategorizationError as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
-    return {"category": category}
+    return {"category": result.category, "product": result.product}
 
 
 @router.post("/expenses", response_class=HTMLResponse)
@@ -128,9 +142,11 @@ def add_manual_expense(
     category: str | None = Form(default=None),
     purchase_date: str | None = Form(default=None),
     store_name: str | None = Form(default=None),
+    product: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     parsed_amount = _parse_amount(amount)
+    product = normalize_product(product)
 
     parsed_date: date | None = None
     if purchase_date:
@@ -139,12 +155,14 @@ def add_manual_expense(
         except ValueError:
             parsed_date = None
 
-    # No category picked → let the model classify it from the description/amount.
-    if not category or not category.strip():
-        try:
-            category = categorize_expense(description, parsed_amount)
-        except ExpenseCategorizationError:
-            category = DEFAULT_CATEGORY
+    # Whatever the form didn't already bring (the sheet pre-fetches a
+    # suggestion while typing), one model call fills in.
+    if not category or not category.strip() or product is None:
+        result = _classify(db, description, parsed_amount)
+        if not category or not category.strip():
+            category = result.category if result else DEFAULT_CATEGORY
+        if product is None and result:
+            product = result.product
 
     receipt = create_manual_expense(
         db,
@@ -153,6 +171,7 @@ def add_manual_expense(
         category=category,
         purchase_date=parsed_date,
         store_name=store_name,
+        product=product,
     )
     return RedirectResponse(url=_home_url(parsed_date, receipt.id), status_code=303)
 
@@ -173,6 +192,7 @@ def receipt_detail(request: Request, receipt_id: int, db: Session = Depends(get_
             "day": _receipt_day(receipt),
             "by_category": sorted(by_category.items(), key=lambda c: -c[1]),
             "back_url": _home_url(_receipt_day(receipt), receipt.id),
+            "known_products": known_products(db),
             "categories": CATEGORIES,
         },
     )
@@ -234,6 +254,7 @@ def update_item(
     description: str | None = Form(default=None),
     amount: str | None = Form(default=None),
     quantity: str | None = Form(default=None),
+    product: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     item = db.get(LineItem, item_id)
@@ -250,6 +271,8 @@ def update_item(
     if quantity is not None:
         parsed_quantity = _parse_amount(quantity) if quantity.strip() else 0
         item.quantity = parsed_quantity if parsed_quantity > 0 else None
+    if product is not None:
+        item.product = normalize_product(product)
 
     # Keep the receipt total in sync with its line items.
     _sync_total(item.receipt)
@@ -272,7 +295,14 @@ def add_item(
     if not description.strip():
         raise HTTPException(status_code=400, detail="Empty description")
 
-    item = LineItem(description=description.strip(), amount=_parse_amount(amount), category=category)
+    parsed_amount = _parse_amount(amount)
+    result = _classify(db, description, parsed_amount)
+    item = LineItem(
+        description=description.strip(),
+        amount=parsed_amount,
+        category=category,
+        product=result.product if result else None,
+    )
     receipt.items.append(item)
     _sync_total(receipt)
     # A receipt the model couldn't read counts as done once filled in by hand.

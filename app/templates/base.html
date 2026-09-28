@@ -31,6 +31,8 @@
             --c-home: #7048e8; --c-health: #e03131; --c-beauty: #d6336c; --c-clothes: #0c8599;
             --c-tech: #4263eb; --c-alco: #9c36b5; --c-fun: #f76707; --c-net: #1098ad;
             --c-other: #868e96;
+            --c-cat: #74b816;
+            --cat-outline: #1b1b1d;
             --bar-muted: #c9d3ce;
             --bar-hover: #a9b8b1;
 
@@ -53,6 +55,7 @@
                 --danger-soft: #33190f;
                 --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .25);
                 --sheet-shadow: 0 -10px 40px rgba(0, 0, 0, .5);
+                --cat-outline: #7d8984;
                 --bar-muted: #34403b;
                 --bar-hover: #4a5852;
             }
@@ -184,6 +187,10 @@
         }
 
         .muted { color: var(--muted); font-size: 0.85rem; }
+
+        .cat-icon { display: inline-block; vertical-align: -0.15em; }
+        /* Emoji glyphs fill more of their box than the SVG; even them out in icon tiles. */
+        .ico .cat-icon, .chip .cat-icon { width: 1.3em; height: 1.3em; }
 
         /* ---------- month header (home + dashboard) ---------- */
         .month-switch { display: flex; align-items: center; gap: 2px; font-weight: 600; }

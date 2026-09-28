@@ -17,6 +17,7 @@ MAX_LISTED = 100
 class Match:
     item_id: int
     description: str
+    product: str | None
     amount: float
     quantity: float | None
     category: str
@@ -24,23 +25,24 @@ class Match:
     store_name: str | None
     currency: str | None
     day: date
-    matched: str  # the term that matched, to show why a row is here
+
+    @property
+    def label(self) -> str:
+        """What the item is, for grouping: its product, or the receipt text if unlabelled."""
+        return self.product or self.description
 
 
-def find_matches(db: Session, terms: list[str], start: date, end: date) -> list[Match]:
-    """Items whose description or store contains any of ``terms``, newest first.
+def _fold(text: str | None) -> str:
+    """Case- and spacing-insensitive form: "KAFFEE  Crema" → "kaffee crema"."""
+    return " ".join((text or "").casefold().split())
 
-    Matching happens in Python with ``casefold``: SQLite's LIKE/lower only fold
-    ASCII, so "KAFFEE" vs "kaffee" works there but "CAFÉ" vs "café" doesn't.
-    A personal history is a few thousand rows a year, so this stays fast.
-    """
-    folded = [t.casefold() for t in terms if t.strip()]
-    if not folded:
-        return []
+
+def _period_items(db: Session, start: date, end: date) -> list[Match]:
     rows = db.execute(
         select(
             LineItem.id,
             LineItem.description,
+            LineItem.product,
             LineItem.amount,
             LineItem.quantity,
             LineItem.category,
@@ -53,16 +55,72 @@ def find_matches(db: Session, terms: list[str], start: date, end: date) -> list[
         .where(effective_date >= start, effective_date < end)
         .order_by(effective_date.desc(), LineItem.id.desc())
     ).all()
+    return [Match(*row) for row in rows]
 
-    matches = []
-    for item_id, desc, amount, qty, category, receipt_id, store, currency, day in rows:
-        haystacks = (desc.casefold(), (store or "").casefold())
-        term = next((t for t in folded if any(t in h for h in haystacks)), None)
-        if term is not None:
-            matches.append(
-                Match(item_id, desc, amount, qty, category, receipt_id, store, currency, day, term)
+
+def find_matches(db: Session, query: str, start: date, end: date) -> list[Match]:
+    """Items whose product, receipt text or store contains ``query``, newest first.
+
+    The product ("coffee beans") is what makes one query find the same thing
+    across shops and languages; the receipt text and store still match too, so
+    "Lidl" or a brand name works.
+
+    Matching happens in Python with ``casefold``: SQLite's LIKE/lower only fold
+    ASCII, so "KAFFEE" vs "kaffee" works there but "CAFÉ" vs "café" doesn't.
+    A personal history is a few thousand rows a year, so this stays fast.
+    """
+    needle = _fold(query)
+    if not needle:
+        return []
+    return [
+        m for m in _period_items(db, start, end)
+        if needle in _fold(m.product) or needle in _fold(m.description) or needle in _fold(m.store_name)
+    ]
+
+
+def known_names(db: Session, start: date, end: date) -> list[dict]:
+    """Products and stores from the user's own receipts, most bought first.
+
+    Items without a product yet fall back to their receipt text. Spellings that
+    differ only in case or spacing are one name, shown the way it was written
+    most often. Feeds both the suggestions and "often bought".
+    """
+    groups: dict[tuple[str, str], dict] = {}
+    for m in _period_items(db, start, end):
+        for kind, name in (("product", m.label), ("store", m.store_name)):
+            key = _fold(name)
+            if not key:
+                continue
+            group = groups.setdefault(
+                (kind, key),
+                {"kind": kind, "key": key, "visits": set(), "items": 0, "amount": 0.0, "spellings": {}},
             )
-    return matches
+            group["items"] += 1
+            group["visits"].add(m.receipt_id)
+            group["amount"] += m.amount
+            spelling = name.strip()
+            group["spellings"][spelling] = group["spellings"].get(spelling, 0) + 1
+
+    names = []
+    for group in groups.values():
+        spellings = group.pop("spellings")
+        visits = group.pop("visits")
+        items = group.pop("items")
+        group["name"] = max(spellings, key=spellings.get)
+        # A product is counted per purchase, a store per visit (receipt).
+        group["count"] = len(visits) if group["kind"] == "store" else items
+        names.append(group)
+    return sorted(names, key=lambda n: (-n["count"], -n["amount"]))
+
+
+def suggest(names: list[dict], query: str, limit: int = 8) -> list[dict]:
+    """Names containing the query; ones that start with it come first."""
+    needle = _fold(query)
+    if not needle:
+        return []
+    hits = [n for n in names if needle in n["key"]]
+    hits.sort(key=lambda n: (not n["key"].startswith(needle), -n["count"]))
+    return hits[:limit]
 
 
 def search_period(today: date) -> tuple[date, date, list[tuple[int, int]]]:
@@ -103,6 +161,14 @@ def summarize(matches: list[Match], months: list[tuple[int, int]]) -> dict:
     else:
         per_month_avg = 0.0
 
+    # "coffee" matches "coffee beans" and "coffee to go": show what went in.
+    products: dict[str, dict] = {}
+    for m in matches:
+        key = _fold(m.label)
+        product = products.setdefault(key, {"name": m.label, "count": 0, "amount": 0.0})
+        product["count"] += 1
+        product["amount"] += m.amount
+
     places: dict[str, dict] = {}
     for m in matches:
         if not m.store_name:
@@ -119,5 +185,6 @@ def summarize(matches: list[Match], months: list[tuple[int, int]]) -> dict:
         "average_price": total / len(matches) if matches else 0.0,
         "chart": chart,
         "places": sorted(places.values(), key=lambda p: -p["amount"])[:3],
+        "products": sorted(products.values(), key=lambda p: -p["amount"])[:8],
         "listed": matches[:MAX_LISTED],
     }

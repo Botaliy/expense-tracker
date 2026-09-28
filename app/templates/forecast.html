@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Скоро понадобится{% endblock %}
+{% block head %}
+<style>
+    .fc-page { display: flex; flex-direction: column; gap: 14px; }
+    .panel { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px; }
+    .panel h2 { font-size: 15px; margin: 0 0 4px; }
+    .panel .lead { font-size: 13px; color: var(--muted); margin: 0 0 12px; max-width: 62ch; }
+    .back { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; align-self: flex-start; }
+    .back:hover { color: var(--text); }
+
+    .toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+    .toggle { position: relative; }
+    .toggle input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+    .toggle span {
+        display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 99px;
+        border: 1px solid var(--line); font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+    .toggle input:checked + span { background: var(--surface-2); color: var(--muted); text-decoration: line-through; }
+    .toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .chips form { margin: 0; }
+    .chips button {
+        display: inline-flex; align-items: center; gap: 6px; padding: 7px 8px 7px 12px; border-radius: 99px;
+        border: 1px solid var(--line); background: var(--surface-2); font-size: 14px; cursor: pointer;
+    }
+    .chips button span { color: var(--muted); font-size: 16px; line-height: 1; }
+    .chips button:hover span { color: var(--text); }
+    .add-row { display: flex; gap: 8px; }
+    .add-row input { flex: 1; min-width: 0; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="fc-page">
+    <a class="back" href="/dashboard">‹ Дашборд</a>
+
+    <section class="panel" aria-labelledby="fc-title">
+        <h2 id="fc-title">Скоро понадобится</h2>
+        <p class="lead">
+            По тому, как часто ты это покупаешь: берётся обычный промежуток между покупками
+            и отсчитывается от последней. Нужно минимум {{ plural(min_purchases, 'покупка', 'покупки', 'покупок') }}, а товары,
+            которые берёшь то часто, то редко, сюда не попадают.
+        </p>
+        {% if predictions %}
+        {% set rows = predictions %}
+        {% set back = '/forecast' %}
+        {% include "_forecast_rows.html" %}
+        {% else %}
+        <div class="empty-state">Пока не из чего предсказывать — загрузи ещё чеков.</div>
+        {% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="cats-title">
+        <h2 id="cats-title">Не учитывать категории</h2>
+        <p class="lead">Регулярные, но не про запасы: кафе, транспорт, связь. Нажми, чтобы включить или выключить.</p>
+        <form method="post" action="/forecast/categories">
+            <div class="toggles">
+                {% for cat in categories %}
+                <label class="toggle">
+                    <input type="checkbox" name="excluded" value="{{ cat }}" onchange="this.form.requestSubmit()"
+                           {{ 'checked' if cat in excluded_categories else '' }}>
+                    <span>{{ cat|cat_icon }} {{ cat }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <noscript><button class="btn btn-secondary btn-sm" type="submit" style="margin-top: 12px">Сохранить</button></noscript>
+        </form>
+    </section>
+
+    <section class="panel" aria-labelledby="products-title">
+        <h2 id="products-title">Не учитывать товары</h2>
+        <p class="lead">Например, пакет на кассе. Товар можно скрыть и крестиком в списке выше.</p>
+        {% if excluded_products %}
+        <div class="chips">
+            {% for product in excluded_products %}
+            <form method="post" action="/forecast/exclusions/delete">
+                <input type="hidden" name="product" value="{{ product }}">
+                <button type="submit" title="Снова учитывать {{ product }}">{{ product }} <span aria-hidden="true">×</span></button>
+            </form>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <form class="add-row" method="post" action="/forecast/exclusions">
+            <input name="product" list="known-products" placeholder="Название товара" aria-label="Товар" required autocomplete="off">
+            <datalist id="known-products">
+                {% for product in known_products %}<option value="{{ product }}">{% endfor %}
+            </datalist>
+            <button class="btn btn-secondary" type="submit">Скрыть</button>
+        </form>
+    </section>
+</main>
+{% endblock %}

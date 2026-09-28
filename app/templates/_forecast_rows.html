@@ -1,0 +1,43 @@
+{# Expects `rows` (list of app.forecast.Prediction) and `back` (where hiding a product returns to). #}
+<style>
+    .fc-rows { display: flex; flex-direction: column; }
+    .fc-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; }
+    .fc-row + .fc-row { border-top: 1px solid var(--line); }
+    .fc-row .ico {
+        width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 18px;
+        background: color-mix(in srgb, var(--c) 16%, var(--surface));
+    }
+    .fc-row .t { font-weight: 600; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+    .fc-row .t:hover { text-decoration: underline; }
+    .fc-row .m { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fc-when { font-size: 13px; font-weight: 600; white-space: nowrap; padding: 3px 9px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+    .fc-when.due { background: var(--accent-soft); color: var(--accent); }
+    .fc-row form { margin: 0; }
+    .fc-hide {
+        width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: var(--muted);
+        font-size: 18px; line-height: 1; cursor: pointer; display: grid; place-items: center;
+    }
+    .fc-hide:hover { background: var(--surface-2); color: var(--text); }
+</style>
+<div class="fc-rows">
+    {% for p in rows %}
+    {% set every = p.interval_days|round|int %}
+    <div class="fc-row">
+        <span class="ico" style="--c: {{ p.category|cat_color }}" aria-hidden="true">{{ p.category|cat_icon }}</span>
+        <div style="min-width:0">
+            <a class="t" href="/search?q={{ p.product|urlencode }}">{{ p.product }}</a>
+            <div class="m">раз в ~{{ plural(every, 'день', 'дня', 'дней') }} · последний раз {{ p.last_date|human_date|lower }}</div>
+        </div>
+        <span class="fc-when {{ p.status }}">
+            {%- if p.days_until <= 0 %}пора
+            {%- elif p.days_until == 1 %}завтра
+            {%- else %}через {{ plural(p.days_until, 'день', 'дня', 'дней') }}{% endif -%}
+        </span>
+        <form method="post" action="/forecast/exclusions">
+            <input type="hidden" name="product" value="{{ p.product }}">
+            <input type="hidden" name="next" value="{{ back }}">
+            <button class="fc-hide" type="submit" title="Не предсказывать {{ p.product }}" aria-label="Не предсказывать {{ p.product }}">×</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>

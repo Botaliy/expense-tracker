@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.forecast import predict, upcoming
 from app.models import LineItem, Receipt
 from app.stats import (
     effective_date,
@@ -62,6 +63,9 @@ def dashboard(
             }
         )
 
+    # The shopping forecast is about now, not about the month being viewed.
+    shopping = upcoming(predict(db)) if summary["is_current"] else None
+
     months = monthly_totals(db, year, mon)
     ticks = nice_ticks(max(m["total"] for m in months))
     return templates.TemplateResponse(
@@ -71,6 +75,7 @@ def dashboard(
             "month": f"{year:04d}-{mon:02d}",
             "summary": summary,
             "forecast": month_forecast(db, year, mon, summary["total"]),
+            "shopping": shopping,
             "top_items": top_items(db, start, end),
             "top_places": top_places(db, start, end),
             "api_usage": current_month_usage(db),

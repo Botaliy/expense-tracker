@@ -144,6 +144,22 @@
         {% endif %}
     </section>
 
+    {% if shopping is not none %}
+    <section class="panel" aria-labelledby="shopping-title">
+        <div class="panel-head">
+            <h2 id="shopping-title">Скоро понадобится</h2>
+            <a class="muted" href="/forecast">все и фильтр ›</a>
+        </div>
+        {% if shopping %}
+        {% set rows = shopping %}
+        {% set back = '/dashboard' %}
+        {% include "_forecast_rows.html" %}
+        {% else %}
+        <p class="muted" style="margin: 0">На этой неделе ничего не заканчивается.</p>
+        {% endif %}
+    </section>
+    {% endif %}
+
     <section class="panel" aria-labelledby="months-title">
         <div class="panel-head">
             <h2 id="months-title">По месяцам</h2>

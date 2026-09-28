@@ -29,9 +29,15 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     # Import models so they're registered on Base.metadata before create_all.
     from app import models  # noqa: F401
+    from app.forecast import seed_default_exclusions
 
+    # Seed only a brand-new table, so defaults the user removed stay removed.
+    new_exclusions = not inspect(engine).has_table(models.ForecastExclusion.__tablename__)
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
+    if new_exclusions:
+        with Session(engine) as db:
+            seed_default_exclusions(db)
 
 
 def _add_missing_columns() -> None:

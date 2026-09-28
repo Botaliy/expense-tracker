@@ -1,7 +1,17 @@
 import enum
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -70,3 +80,14 @@ class ApiCall(Base):
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Plain column, not a foreign key: the cost stays after a receipt is deleted.
     receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class ForecastExclusion(Base):
+    """A product or a whole category the shopping forecast ignores. See app.forecast."""
+
+    __tablename__ = "forecast_exclusions"
+    __table_args__ = (UniqueConstraint("kind", "value"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))  # "product" or "category"
+    value: Mapped[str] = mapped_column(String(64))

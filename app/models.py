@@ -154,3 +154,23 @@ class Budget(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     category: Mapped[str] = mapped_column(String(64), unique=True)
     monthly_limit: Mapped[float] = mapped_column(Float)
+
+
+class ShoppingItem(Base):
+    """A line on the shopping list. See app.shopping.
+
+    Forecast lines exist here only once ticked off (product + the due date they
+    were ticked for); lines typed by hand live here from the start.
+    """
+
+    __tablename__ = "shopping_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    product: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC)
+    )
+    done_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

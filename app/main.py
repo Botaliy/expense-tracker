@@ -20,6 +20,7 @@ from app.routers import (
     receipts,
     recurring,
     search,
+    shopping,
     usage,
 )
 
@@ -58,3 +59,4 @@ app.include_router(bank.router)
 app.include_router(budgets.router)
 app.include_router(prices.router)
 app.include_router(recurring.router)
+app.include_router(shopping.router)

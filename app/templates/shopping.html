@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Список покупок{% endblock %}
+{% block head %}
+<style>
+    .sl-row {
+        display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center;
+        padding: 11px 0; border-top: 1px solid var(--line); margin: 0;
+        text-transform: none; letter-spacing: 0; font-size: 16px; font-weight: 500; color: var(--text); cursor: pointer;
+    }
+    .sl-row:first-of-type { border-top: 0; }
+    .sl-row input { width: 22px; height: 22px; accent-color: var(--accent); }
+    .sl-row .m { font-size: 12px; color: var(--muted); font-weight: 400; }
+    .sl-row.done .n { color: var(--muted); text-decoration: line-through; }
+    .sl-row form { display: contents; }
+    .add { display: flex; gap: 8px; }
+    .add input { flex: 1; min-width: 0; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="sub-page">
+    <a class="back" href="/more">‹ Ещё</a>
+    <section class="panel">
+        <h2>Список покупок</h2>
+        <p class="lead">Сам подтягивает то, что по истории покупок скоро закончится. Добавь своё, а в магазине отмечай, что взял.</p>
+        <form method="post" action="/shopping/items" class="add" style="margin-bottom: 8px">
+            <input type="text" name="name" placeholder="Добавить: батарейки, лук…" required autocomplete="off" aria-label="Что купить">
+            <button type="submit" class="btn btn-primary">+</button>
+        </form>
+        {% for line in lines %}
+        {% if line.prediction %}{% set p = line.prediction %}
+        <form method="post" action="/shopping/forecast">
+            <input type="hidden" name="product" value="{{ p.product }}">
+            <input type="hidden" name="due_date" value="{{ p.due_date.isoformat() }}">
+            <label class="sl-row {{ 'done' if line.done }}">
+                <input type="checkbox" name="done" value="true" {% if line.done %}checked{% endif %} onchange="this.form.requestSubmit()">
+                <span><span class="n">{{ p.category|cat_icon }} {{ p.product }}</span><br>
+                    <span class="m">🔮 раз в ~{{ plural(p.interval_days|round|int, 'день', 'дня', 'дней') }}, {{ 'пора' if p.days_until <= 0 else 'через ' ~ plural(p.days_until, 'день', 'дня', 'дней') }}</span></span>
+            </label>
+        </form>
+        {% else %}
+        <form method="post" action="/shopping/items/{{ line.item_id }}">
+            <label class="sl-row {{ 'done' if line.done }}">
+                <input type="checkbox" name="done" value="true" {% if line.done %}checked{% endif %} onchange="this.form.requestSubmit()">
+                <span class="n">{{ line.name }}</span>
+            </label>
+        </form>
+        {% endif %}
+        {% else %}
+        <div class="empty-state">Список пуст. Когда что-то из обычных покупок будет подходить к концу, оно появится здесь само.</div>
+        {% endfor %}
+        {% if lines|selectattr('done')|list and lines|rejectattr('prediction')|selectattr('done')|list %}
+        <form method="post" action="/shopping/clear" style="display:flex; justify-content:center; margin-top: 8px">
+            <button type="submit" class="btn btn-ghost btn-sm">Убрать отмеченные</button>
+        </form>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

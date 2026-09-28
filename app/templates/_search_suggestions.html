@@ -1,0 +1,7 @@
+{% for s in suggestions %}
+<a class="suggestion" href="/search?q={{ s.name|urlencode }}" role="option">
+    <span class="kind" aria-hidden="true">{% if s.kind == 'store' %}🏪{% else %}🏷️{% endif %}</span>
+    <span class="name">{{ s.name }}</span>
+    <span class="stat">{{ plural(s.count, 'раз', 'раза', 'раз') }} · {{ (s.amount|round)|money }}</span>
+</a>
+{% endfor %}

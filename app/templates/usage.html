@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Расходы на Claude{% endblock %}
+{% block head %}
+<style>
+    .usage { display: flex; flex-direction: column; gap: 14px; }
+    .panel { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px; }
+    .panel h2 { font-size: 15px; margin: 0 0 12px; }
+    .back { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; align-self: flex-start; }
+    .back:hover { color: var(--text); }
+    .hero { font-size: 44px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; margin: 4px 0; }
+    .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    .fact > span { display: block; font-size: 12px; color: var(--muted); }
+    .fact b { font-size: 16px; font-variant-numeric: tabular-nums; }
+    .note { font-size: 12px; color: var(--muted); margin: 12px 0 0; max-width: 62ch; }
+
+    .purpose { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; }
+    .purpose + .purpose { border-top: 1px solid var(--line); }
+    .purpose .name { font-weight: 600; }
+    .purpose .cost { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+    .purpose .meta { font-size: 12px; color: var(--muted); grid-column: 1 / -1; }
+
+    .calls-wrap { overflow-x: auto; margin: 0 -6px; }
+    .calls { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .calls th { font-size: 11px; padding: 6px; border-bottom: 1px solid var(--line); }
+    .calls td { padding: 7px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .calls tr:last-child td { border-bottom: 0; }
+    .calls .r { text-align: right; }
+    .calls a { color: var(--accent); text-decoration: none; }
+    .calls .muted { font-size: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="usage">
+    <a class="back" href="/dashboard">‹ Дашборд</a>
+
+    <section class="panel" aria-label="Итог">
+        <span class="muted">Claude за {{ month_name|lower }}</span>
+        <div class="hero">{{ r.month.cost|usd }}</div>
+        <div class="facts">
+            <div class="fact"><span>Запросов</span><b>{{ r.month.calls }}</b></div>
+            <div class="fact"><span>Токенов вход / выход</span><b>{{ r.month.input_tokens|compact_tokens }} / {{ r.month.output_tokens|compact_tokens }}</b></div>
+            <div class="fact"><span>За всё время</span><b>{{ r.overall.cost|usd }}</b></div>
+        </div>
+        <p class="note">
+            Посчитано по токенам из ответов API и прайсу Anthropic. Это оценка: точный счёт — в консоли Anthropic.
+            {% if r.unpriced %}Для {{ plural(r.unpriced, 'запроса', 'запросов', 'запросов') }} модели нет в прайсе приложения, они не вошли в сумму.{% endif %}
+        </p>
+    </section>
+
+    {% if r.by_purpose %}
+    <section class="panel" aria-labelledby="purpose-title">
+        <h2 id="purpose-title">По типу запроса</h2>
+        {% for p in r.by_purpose %}
+        <div class="purpose">
+            <span class="name">{{ p.label }}</span>
+            <span class="cost">{{ p.month.cost|usd }}</span>
+            <span class="meta">
+                в этом месяце {{ plural(p.month.calls, 'запрос', 'запроса', 'запросов') }} ·
+                всего {{ p.overall.cost|usd }} за {{ plural(p.overall.calls, 'запрос', 'запроса', 'запросов') }} ·
+                в среднем {{ p.average|usd }} за запрос
+            </span>
+        </div>
+        {% endfor %}
+    </section>
+
+    <section class="panel" aria-labelledby="usage-months-title">
+        <h2 id="usage-months-title">По месяцам, $</h2>
+        {% set selected = r.chart[-1].key %}
+        {% set link_base = none %}
+        {% set chart_usd = true %}
+        {% set chart_caption = 'Расходы на Claude по месяцам' %}
+        {% include "_months_chart.html" %}
+    </section>
+
+    <section class="panel" aria-labelledby="calls-title">
+        <h2 id="calls-title">Последние запросы</h2>
+        <div class="calls-wrap">
+            <table class="calls">
+                <thead><tr><th>Когда</th><th>Запрос</th><th class="r">Токены</th><th class="r">Цена</th></tr></thead>
+                <tbody>
+                {% for c in r.latest %}
+                <tr>
+                    <td>{{ c.created_at|human_date_time }}</td>
+                    <td>
+                        {{ purpose_labels.get(c.purpose, c.purpose) }}
+                        {% if c.receipt_id %}<a href="/receipts/{{ c.receipt_id }}">#{{ c.receipt_id }}</a>{% endif %}
+                    </td>
+                    <td class="r" title="вход → выход">{{ (c.input_tokens + c.cache_write_tokens + c.cache_read_tokens)|compact_tokens }} → {{ c.output_tokens|compact_tokens }}</td>
+                    <td class="r">{{ c.cost_usd|usd }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% else %}
+    <div class="panel"><p class="note" style="margin:0">Запросов к Claude ещё не было. Они появятся здесь после первого распознанного чека.</p></div>
+    {% endif %}
+</main>
+{% endblock %}

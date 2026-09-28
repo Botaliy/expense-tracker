@@ -89,7 +89,7 @@
         }
         .tabbar nav {
             max-width: 640px; margin: 0 auto;
-            display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 4px;
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
             background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 5px;
         }
         .tabbar a, .tabbar button {
@@ -252,6 +252,28 @@
             overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
         }
 
+        /* ---------- secondary pages (budgets, prices, import…) ---------- */
+        .sub-page { display: flex; flex-direction: column; gap: 14px; }
+        .sub-page .back { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; align-self: flex-start; }
+        .sub-page .back:hover { color: var(--text); }
+        .panel { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px; }
+        .panel h2 { font-size: 15px; margin: 0 0 4px; }
+        .panel .lead { font-size: 13px; color: var(--muted); margin: 0 0 12px; max-width: 62ch; }
+        .panel > :last-child { margin-bottom: 0; }
+        .list-row {
+            display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
+            padding: 10px 0; border-top: 1px solid var(--line);
+        }
+        .list-row:first-of-type { border-top: 0; }
+        .list-row .t { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .list-row .m { font-size: 13px; color: var(--muted); }
+        .pill {
+            display: inline-block; font-size: 12px; font-weight: 700; border-radius: 99px; padding: 2px 8px;
+            background: var(--surface-2); color: var(--muted); white-space: nowrap;
+        }
+        .pill.good { background: var(--accent-soft); color: var(--accent); }
+        .pill.bad { background: var(--danger-soft); color: var(--danger); }
+
         /* ---------- login ---------- */
         .login-shell { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
         .login-card { width: 100%; max-width: 360px; }
@@ -282,11 +304,11 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
             Поиск
         </a>
-        <form method="post" action="/logout">
-            <button type="submit" title="Выйти ({{ logged_in }})" aria-label="Выйти">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3"/><path d="M10 16l4-4-4-4M14 12H4"/></svg>
-            </button>
-        </form>
+        {% set more_paths = ['/more', '/forecast', '/usage'] %}
+        <a href="/more" class="{{ 'on' if request.url.path in more_paths else '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>
+            Ещё
+        </a>
     </nav>
 </div>
 {% endif %}

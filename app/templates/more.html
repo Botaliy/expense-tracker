@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Ещё{% endblock %}
+{% block head %}
+<style>
+    .menu { display: flex; flex-direction: column; }
+    .menu a {
+        display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+        padding: 11px 4px; color: inherit; text-decoration: none; border-top: 1px solid var(--line);
+    }
+    .menu a:first-child { border-top: 0; }
+    .menu a:hover .t { color: var(--accent); }
+    .menu .i {
+        width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 19px;
+        background: var(--surface-2);
+    }
+    .menu .t { font-weight: 600; }
+    .menu .m { font-size: 13px; color: var(--muted); }
+    .menu .chev { color: var(--muted); font-size: 20px; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="sub-page">
+    <h1 style="margin:0">Ещё</h1>
+
+    {% macro entry(href, icon, title, note) %}
+    <a href="{{ href }}"><span class="i" aria-hidden="true">{{ icon }}</span><span><span class="t">{{ title }}</span><br><span class="m">{{ note }}</span></span><span class="chev">›</span></a>
+    {% endmacro %}
+
+    <section class="panel menu">
+        {{ entry('/forecast', '🔮', 'Прогноз покупок', 'Настройки: что не предсказывать') }}
+        {{ entry('/usage', '💸', 'Расходы на Claude', 'Сколько стоит распознавание') }}
+    </section>
+
+    <form method="post" action="/logout" style="display:flex; justify-content:center">
+        <button type="submit" class="btn btn-ghost btn-sm">Выйти ({{ request.session.get('user') }})</button>
+    </form>
+</main>
+{% endblock %}

@@ -6,6 +6,13 @@
     <meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0d1210" media="(prefers-color-scheme: dark)">
     <title>{% block title %}Траты{% endblock %}</title>
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <link rel="icon" type="image/png" href="/static/icons/favicon.png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Траты">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
@@ -313,6 +320,9 @@
 </div>
 {% endif %}
 <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(function () {});
+    }
     // Prevent double-submit (e.g. clicking a submit button twice while the
     // request is in flight), which would otherwise create duplicate records.
     document.addEventListener('submit', function (e) {

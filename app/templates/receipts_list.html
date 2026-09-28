@@ -159,7 +159,7 @@
     <div class="actions">
         <form method="post" action="/receipts" enctype="multipart/form-data" id="upload-form">
             {# No `capture` attribute: phones then offer both the camera and the gallery. #}
-            <input type="file" id="receipt-file" name="file" accept="image/*" required hidden>
+            <input type="file" id="receipt-file" name="file" accept="image/*" multiple required hidden>
             <label for="receipt-file" class="btn btn-primary" id="upload-btn" role="button" tabindex="0">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
                 <span>Сфотографировать чек</span>
@@ -278,7 +278,8 @@
     fileInput.addEventListener('change', function () {
         if (!fileInput.files.length) return;
         uploadBtn.setAttribute('aria-busy', 'true');
-        uploadBtn.querySelector('span').textContent = 'Загружаю…';
+        var n = fileInput.files.length;
+        uploadBtn.querySelector('span').textContent = n > 1 ? 'Загружаю фото: ' + n + '…' : 'Загружаю…';
         document.getElementById('upload-form').requestSubmit();
     });
     window.addEventListener('pageshow', function (e) {

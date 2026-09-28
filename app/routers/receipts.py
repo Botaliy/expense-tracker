@@ -107,29 +107,57 @@ def _home_url(day: date | None, receipt_id: int) -> str:
     return f"/?month={day:%Y-%m}#r-{receipt_id}"
 
 
+def _accept_uploads(files: list[UploadFile], db: Session, background_tasks: BackgroundTasks) -> RedirectResponse:
+    """Queue each photo for recognition; the same photo twice is recognized once."""
+    receipt_ids: list[int] = []
+    got_any = False
+    for file in files:
+        content = file.file.read()
+        if not content:
+            continue
+        got_any = True
+        digest = sha256(content)
+        existing = same_photo(db, digest)
+        if existing is not None:
+            # Same file again: no second model call, no second expense.
+            if len(files) == 1:
+                return RedirectResponse(url=f"/receipts/{existing.id}?dup=photo", status_code=303)
+            continue
+        image_path = save_upload(file.filename or "receipt.jpg", content)
+        receipt = create_receipt(db, image_path, digest)
+        background_tasks.add_task(process_receipt_in_background, receipt.id)
+        receipt_ids.append(receipt.id)
+    if not got_any:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if not receipt_ids:  # all of them were already uploaded
+        return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url=_home_url(None, receipt_ids[-1]), status_code=303)
+
+
 # Plain ``def`` so FastAPI runs it in a threadpool; recognition itself happens
-# in a background task, and the feed polls until it finishes.
+# in a background task, and the feed polls until it finishes. Several photos
+# at once are fine: each becomes its own receipt.
 @router.post("/receipts", response_class=HTMLResponse)
 def upload_receipt(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
+    file: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
-    content = file.file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty file")
+    return _accept_uploads(file, db, background_tasks)
 
-    digest = sha256(content)
-    existing = same_photo(db, digest)
-    if existing is not None:
-        # Same file again: no second model call, no second expense.
-        return RedirectResponse(url=f"/receipts/{existing.id}?dup=photo", status_code=303)
 
-    image_path = save_upload(file.filename or "receipt.jpg", content)
-    receipt = create_receipt(db, image_path, digest)
-    background_tasks.add_task(process_receipt_in_background, receipt.id)
-
-    return RedirectResponse(url=_home_url(None, receipt.id), status_code=303)
+# Target of the installed app's "Share" entry (manifest share_target): a photo
+# shared from the gallery or another app lands here.
+@router.post("/share", response_class=HTMLResponse)
+def share_receipt(
+    background_tasks: BackgroundTasks,
+    file: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+):
+    images = [f for f in file if (f.content_type or "").startswith("image/")]
+    if not images:
+        return RedirectResponse(url="/", status_code=303)
+    return _accept_uploads(images, db, background_tasks)
 
 
 @router.post("/expenses/categorize", response_class=JSONResponse)

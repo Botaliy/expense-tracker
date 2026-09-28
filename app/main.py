@@ -16,6 +16,7 @@ from app.routers import (
     dashboard,
     forecast,
     more,
+    prices,
     receipts,
     search,
     usage,
@@ -54,3 +55,4 @@ app.include_router(forecast.router)
 app.include_router(more.router)
 app.include_router(bank.router)
 app.include_router(budgets.router)
+app.include_router(prices.router)

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Цены{% endblock %}
+{% block head %}
+<style>
+    .chg { font-weight: 700; white-space: nowrap; }
+    .chg.up { color: var(--danger); }
+    .chg.down { color: var(--accent); }
+    .shops { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .shops > span { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+    .shops > span.best { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+    a.t { color: inherit; text-decoration: none; }
+    a.t:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="sub-page">
+    <a class="back" href="/more">‹ Ещё</a>
+
+    <section class="panel">
+        <h2>Подорожало</h2>
+        <p class="lead">Последняя покупка за 2 месяца против обычной цены в том же магазине. Цена за штуку или кг, если в чеке было количество.</p>
+        {% for c in r.up %}
+        <div class="list-row">
+            <div style="min-width:0">
+                <a class="t" href="/search?q={{ c.product|urlencode }}">{{ c.product }}</a>
+                <div class="m">{{ c.store }} · было ~{{ c.usual_price|money }}, стало {{ c.last_price|money }} · <a href="/receipts/{{ c.receipt_id }}">{{ c.day|human_date|lower }}</a></div>
+            </div>
+            <span class="chg up">+{{ (c.change * 100)|round|int }}%</span>
+        </div>
+        {% else %}
+        <div class="empty-state">Ничего заметно не подорожало{% if not r.tracked %}: пока мало повторных покупок{% endif %}.</div>
+        {% endfor %}
+    </section>
+
+    {% if r.down %}
+    <section class="panel">
+        <h2>Подешевело</h2>
+        {% for c in r.down %}
+        <div class="list-row">
+            <div style="min-width:0">
+                <a class="t" href="/search?q={{ c.product|urlencode }}">{{ c.product }}</a>
+                <div class="m">{{ c.store }} · было ~{{ c.usual_price|money }}, стало {{ c.last_price|money }}</div>
+            </div>
+            <span class="chg down">−{{ (-c.change * 100)|round|int }}%</span>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="panel">
+        <h2>Где дешевле</h2>
+        <p class="lead">То, что ты покупаешь в разных магазинах: медианная цена в каждом за последний год.</p>
+        {% for c in r.cheaper %}
+        <div class="list-row">
+            <div style="min-width:0">
+                <a class="t" href="/search?q={{ c.product|urlencode }}">{{ c.product }}</a>
+                <div class="m">обычно в {{ c.usual_store.store }}, в {{ c.stores[0].store }} дешевле на {{ (c.saving * 100)|round|int }}%</div>
+                <div class="shops">
+                    {% for s in c.stores %}<span class="{{ 'best' if loop.first }}">{{ s.store }} {{ s.price|money }}</span>{% endfor %}
+                </div>
+            </div>
+            <span class="pill good">−{{ (c.saving * 100)|round|int }}%</span>
+        </div>
+        {% else %}
+        <div class="empty-state">Пока нет товаров, купленных в разных магазинах с заметной разницей в цене.</div>
+        {% endfor %}
+    </section>
+</main>
+{% endblock %}

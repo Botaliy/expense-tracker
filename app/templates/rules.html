@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Мои правила{% endblock %}
+{% block content %}
+<main class="sub-page">
+    <a class="back" href="/more">‹ Ещё</a>
+    <section class="panel">
+        <h2>Мои правила</h2>
+        <p class="lead">
+            Когда ты меняешь категорию или товар у позиции, это запоминается для той же строки в том же магазине.
+            Следующий такой чек разложится сам, а при ручном вводе даже не понадобится спрашивать Claude.
+        </p>
+        {% for rule in rules %}
+        <div class="list-row">
+            <div style="min-width:0">
+                <div class="t">{{ rule.description }}</div>
+                <div class="m">
+                    {{ rule.store_name or 'любой магазин' }} → {{ rule.category|cat_icon }} {{ rule.category }}{% if rule.product %} · {{ rule.product }}{% endif %}
+                    {% if rule.hits %} · сработало {{ plural(rule.hits, 'раз', 'раза', 'раз') }}{% endif %}
+                </div>
+            </div>
+            <form method="post" action="/rules/{{ rule.id }}/delete" onsubmit="return confirm('Забыть это правило?')">
+                <button type="submit" class="btn btn-ghost btn-sm">Забыть</button>
+            </form>
+        </div>
+        {% else %}
+        <div class="empty-state">Правил пока нет: они появятся, когда ты поправишь категорию у позиции в чеке.</div>
+        {% endfor %}
+    </section>
+</main>
+{% endblock %}

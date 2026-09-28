@@ -22,6 +22,7 @@ from app.ai_client import (
 from app.auth import get_current_user
 from app.categories import CATEGORIES, DEFAULT_CATEGORY
 from app.database import get_db
+from app import rules
 from app.feed import month_feed
 from app.models import LineItem, Receipt, ReceiptStatus
 from app.products import known_products, normalize_product
@@ -89,7 +90,10 @@ def _receipt_day(receipt: Receipt) -> date:
 
 
 def _classify(db: Session, description: str, amount: float | None) -> ExpenseClassification | None:
-    """Category + product from the model, or None when it's unavailable."""
+    """Category + product from a learned rule or the model, or None when neither has one."""
+    learned = rules.match(db, description)
+    if learned:
+        return ExpenseClassification(category=learned.category, product=learned.product)
     try:
         return classify_expense(description, amount, known_products(db))
     except ExpenseCategorizationError:
@@ -128,6 +132,9 @@ def categorize_manual_expense(
     db: Session = Depends(get_db),
 ):
     """Suggest a category and product while the manual-entry form is filled in."""
+    learned = rules.match(db, description)
+    if learned:
+        return {"category": learned.category, "product": learned.product, "source": "rule"}
     try:
         result = classify_expense(description, amount, known_products(db))
     except ExpenseCategorizationError as exc:
@@ -263,6 +270,7 @@ def update_item(
     if category not in CATEGORIES:
         raise HTTPException(status_code=400, detail="Unknown category")
 
+    before = (item.category, item.product)
     item.category = category
     if description is not None and description.strip():
         item.description = description.strip()
@@ -273,6 +281,10 @@ def update_item(
         item.quantity = parsed_quantity if parsed_quantity > 0 else None
     if product is not None:
         item.product = normalize_product(product)
+
+    # A changed category or product is a correction worth remembering.
+    if (item.category, item.product) != before:
+        rules.learn(db, item, item.receipt.store_name)
 
     # Keep the receipt total in sync with its line items.
     _sync_total(item.receipt)

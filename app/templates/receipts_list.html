@@ -312,7 +312,8 @@
         var parts = [];
         if (autoCat.checked) parts.push('категория: ' + suggested.category);
         if (suggested.product) parts.push('товар: ' + suggested.product);
-        hint.textContent = parts.length ? 'Claude: ' + parts.join(' · ') : '';
+        var who = suggested.source === 'rule' ? 'Твоё правило' : 'Claude';
+        hint.textContent = parts.length ? who + ': ' + parts.join(' · ') : '';
     }
     function suggest() {
         clearTimeout(timer);

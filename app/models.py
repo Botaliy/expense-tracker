@@ -91,3 +91,22 @@ class ForecastExclusion(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     kind: Mapped[str] = mapped_column(String(16))  # "product" or "category"
     value: Mapped[str] = mapped_column(String(64))
+
+
+class CategoryRule(Base):
+    """A correction the user made once, applied to the same line next time. See app.rules."""
+
+    __tablename__ = "category_rules"
+    __table_args__ = (UniqueConstraint("key", "store_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(255))  # folded item description
+    store_key: Mapped[str] = mapped_column(String(255), default="")  # folded store, "" for any
+    description: Mapped[str] = mapped_column(String(255))  # as the user last saw it
+    store_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    category: Mapped[str] = mapped_column(String(64))
+    product: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    hits: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )

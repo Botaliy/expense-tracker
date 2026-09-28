@@ -9,6 +9,7 @@ from app.categories import normalize_category
 from app.config import get_settings
 from app.models import LineItem, Receipt, ReceiptStatus
 from app.products import known_products, known_stores, normalize_product
+from app.rules import apply_rules
 from app.schemas import ExtractedReceipt
 
 
@@ -124,6 +125,9 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
     adjustment = _total_adjustment(extracted)
     if adjustment is not None:
         receipt.items.append(adjustment)
+
+    # The user's own corrections from earlier receipts beat the model's guess.
+    apply_rules(db, receipt)
 
     # Totals are always the sum of line items, so the receipt and the dashboard
     # (which aggregates line items) never disagree.

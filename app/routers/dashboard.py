@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import budgets
+from app import budgets, recurring
 from app.auth import get_current_user
 from app.database import get_db
 from app.forecast import predict, upcoming
@@ -64,10 +64,11 @@ def dashboard(
             }
         )
 
-    # The shopping forecast and budgets are about now, not about the month
-    # being viewed.
+    # The shopping forecast, budgets and regular payments are about now, not
+    # about the month being viewed.
     shopping = upcoming(predict(db)) if summary["is_current"] else None
     budget_alerts = budgets.report(db)["alerts"] if summary["is_current"] else []
+    payment_reminders = recurring.reminders(recurring.detect(db)) if summary["is_current"] else []
 
     months = monthly_totals(db, year, mon)
     ticks = nice_ticks(max(m["total"] for m in months))
@@ -80,6 +81,7 @@ def dashboard(
             "forecast": month_forecast(db, year, mon, summary["total"]),
             "shopping": shopping,
             "budget_alerts": budget_alerts,
+            "payment_reminders": payment_reminders,
             "top_items": top_items(db, start, end),
             "top_places": top_places(db, start, end),
             "api_usage": current_month_usage(db),

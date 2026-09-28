@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Регулярные платежи{% endblock %}
+{% block content %}
+<main class="sub-page">
+    <a class="back" href="/more">‹ Ещё</a>
+    <section class="panel">
+        <h2>Регулярные платежи</h2>
+        <p class="lead">
+            Траты, которые бывают примерно раз в месяц, около одного и того же числа и на похожую сумму
+            (минимум {{ min_months }} месяца из последних {{ lookback }}). Сами они не добавляются, придут чеком или выпиской;
+            здесь видно, что в этом месяце ещё не пришло.
+        </p>
+        {% for r in items %}
+        <div class="list-row">
+            <div style="min-width:0">
+                <div class="t">{{ r.category|cat_icon }} {{ r.name }}</div>
+                <div class="m">
+                    ~{{ r.amount|money }} около {{ r.day }}-го · {{ r.months }} из последних {{ lookback }} мес.
+                    {% if r.paid_this_month is not none %} · в этом месяце {{ r.paid_this_month|money }}{% endif %}
+                </div>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center">
+                {% if r.status == 'paid' %}<span class="pill good">пришёл</span>
+                {% elif r.status == 'late' %}<span class="pill bad">не видно</span>
+                {% elif r.status == 'soon' %}<span class="pill">скоро</span>
+                {% else %}<span class="pill">{{ r.day }}-го</span>{% endif %}
+                <form method="post" action="/recurring/hide" style="margin:0">
+                    <input type="hidden" name="key" value="{{ r.key }}">
+                    <button type="submit" class="btn btn-ghost btn-sm" title="Не считать регулярным" aria-label="Не считать {{ r.name }} регулярным">×</button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">Пока не нашлось: нужно хотя бы {{ min_months }} месяца истории.</div>
+        {% endfor %}
+    </section>
+</main>
+{% endblock %}

@@ -18,6 +18,7 @@ from app.routers import (
     more,
     prices,
     receipts,
+    recurring,
     search,
     usage,
 )
@@ -56,3 +57,4 @@ app.include_router(more.router)
 app.include_router(bank.router)
 app.include_router(budgets.router)
 app.include_router(prices.router)
+app.include_router(recurring.router)

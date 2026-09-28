@@ -28,3 +28,9 @@ def session():
 
     return SessionLocal()
 
+
+def months_back(today: date, n: int) -> tuple[int, int]:
+    y, m = today.year, today.month - n
+    while m < 1:
+        y, m = y - 1, m + 12
+    return y, m

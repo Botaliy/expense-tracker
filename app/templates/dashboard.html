@@ -144,7 +144,7 @@
         {% endif %}
     </section>
 
-    {% if budget_alerts %}
+    {% if budget_alerts or payment_reminders %}
     <section class="panel" aria-labelledby="alerts-title">
         <div class="panel-head"><h2 id="alerts-title">Обрати внимание</h2></div>
         {% for b in budget_alerts %}
@@ -157,6 +157,15 @@
                 </div>
             </div>
             <span class="pill {{ 'bad' if b.status == 'over' else '' }}">{{ (b.share * 100)|round|int }}%</span>
+        </a>
+        {% endfor %}
+        {% for r in payment_reminders %}
+        <a class="list-row" href="/recurring" style="color: inherit; text-decoration: none">
+            <div style="min-width:0">
+                <div class="t">🔁 {{ r.name }}</div>
+                <div class="m">обычно ~{{ r.amount|money }} около {{ r.day }}-го{{ ', в этом месяце ещё не видно' if r.status == 'late' }}</div>
+            </div>
+            <span class="pill {{ 'bad' if r.status == 'late' }}">{{ 'нет' if r.status == 'late' else 'скоро' }}</span>
         </a>
         {% endfor %}
     </section>

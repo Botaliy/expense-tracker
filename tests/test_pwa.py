@@ -66,3 +66,24 @@ def test_share_without_image_goes_home(logged_in_client):
     )
     assert resp.headers["location"] == "/"
     assert _receipt_count() == 0
+
+
+def test_pages_are_not_cached(logged_in_client):
+    # Going back to a page must show edits made since, not the browser's copy.
+    assert logged_in_client.get("/").headers["cache-control"] == "no-store"
+    assert "no-store" not in logged_in_client.get("/static/manifest.webmanifest").headers.get("cache-control", "")
+
+
+def test_fetch_posted_form_gets_redirect_target_as_header(logged_in_client):
+    # base.html posts forms via fetch, which would follow the redirect itself
+    # and lose its #anchor; the page navigates to X-Location instead.
+    resp = logged_in_client.post(
+        "/expenses", data={"amount": "5", "description": "taxi", "category": "Транспорт"},
+        headers={"X-Page-Form": "1"}, follow_redirects=False,
+    )
+    assert resp.status_code == 204
+    assert resp.headers["x-location"].startswith("/?month=")
+    assert "#r-" in resp.headers["x-location"]
+
+    plain = logged_in_client.post("/shopping/items", data={"name": "milk"}, follow_redirects=False)
+    assert plain.status_code == 303

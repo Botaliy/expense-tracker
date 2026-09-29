@@ -261,8 +261,8 @@
 
         /* ---------- secondary pages (budgets, prices, import…) ---------- */
         .sub-page { display: flex; flex-direction: column; gap: 14px; }
-        .sub-page .back { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; align-self: flex-start; }
-        .sub-page .back:hover { color: var(--text); }
+        .back { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; align-self: flex-start; }
+        .back:hover { color: var(--text); }
         .panel { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px; }
         .panel h2 { font-size: 15px; margin: 0 0 4px; }
         .panel .lead { font-size: 13px; color: var(--muted); margin: 0 0 12px; max-width: 62ch; }
@@ -289,6 +289,25 @@
             *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
+    <script>
+        // Tag each history entry with the app page it was opened from, so the
+        // "‹ Назад" links (a.back) can return there instead of to a fixed page.
+        // Runs in <head>: page scripts below may read history.state.from.
+        (function () {
+            var state = history.state || {};
+            if ('from' in state) return;
+            var here = location.href.split('#')[0], from = null;
+            try {
+                var last = JSON.parse(sessionStorage.getItem('lastPage') || 'null');
+                var ref = document.referrer && new URL(document.referrer);
+                // The same page again (form saved, auto-refresh): it still came from where it did.
+                if (last && last.url === here) from = last.from;
+                else if (ref && ref.origin === location.origin) from = ref.pathname;
+            } catch (e) {}
+            state.from = from;
+            history.replaceState(state, '');
+        })();
+    </script>
     {% block head %}{% endblock %}
 </head>
 {% set logged_in = request.session.get('user') %}
@@ -323,8 +342,26 @@
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(function () {});
     }
-    // Prevent double-submit (e.g. clicking a submit button twice while the
-    // request is in flight), which would otherwise create duplicate records.
+    // Page forms are posted with fetch and the page they redirect to replaces
+    // the current history entry: otherwise every save (a ticked shopping item,
+    // an added receipt line) adds a copy of the page, and "back" steps through
+    // them. Also prevents double-submit, which would create duplicate records.
+    function releaseForm(form) {
+        delete form.dataset.submitted;
+        form.querySelectorAll('button').forEach(function (btn) { btn.disabled = false; });
+    }
+    function replacePage(url) {
+        var target = new URL(url, location.href);
+        if (target.href.split('#')[0] !== location.href.split('#')[0]) {
+            location.replace(target.href);
+            return;
+        }
+        // Same page: reload keeps the scroll position (location.replace would
+        // either jump to the top or, for a new #anchor, not reload at all).
+        history.replaceState(history.state, '', target.href);
+        if (target.hash) sessionStorage.setItem('scrollToHash', '1');
+        location.reload();
+    }
     document.addEventListener('submit', function (e) {
         var form = e.target;
         // Cancelled (e.g. "no" in a confirm()) or handled by htmx: not a page submit.
@@ -333,19 +370,62 @@
             e.preventDefault();
             return;
         }
+        var submitter = e.submitter;
+        var method = ((submitter && submitter.getAttribute('formmethod')) || form.method).toLowerCase();
+        var data = new FormData(form);
+        if (submitter && submitter.name) data.append(submitter.name, submitter.value);
         form.dataset.submitted = '1';
         form.querySelectorAll('button[type=submit], button:not([type])').forEach(function (btn) {
             btn.disabled = true;
         });
-    });
-    // Coming back via the browser's back button restores the page from cache
-    // with its buttons still disabled.
-    window.addEventListener('pageshow', function (e) {
-        if (!e.persisted) return;
-        document.querySelectorAll('form[data-submitted]').forEach(function (form) {
-            delete form.dataset.submitted;
-            form.querySelectorAll('button').forEach(function (btn) { btn.disabled = false; });
+        // data-native: the response is a page of its own (e.g. login errors).
+        if (method !== 'post' || 'native' in form.dataset) return;
+        e.preventDefault();
+        var action = submitter && submitter.hasAttribute('formaction') ? submitter.formAction : form.action;
+        fetch(action, {
+            method: 'POST', body: data, credentials: 'same-origin', headers: { 'X-Page-Form': '1' }
+        }).then(function (res) {
+            var next = res.headers.get('X-Location');
+            if (next) return replacePage(next);
+            return res.text().then(function (html) {
+                document.open();
+                document.write(html);
+                document.close();
+            });
+        }).catch(function () {
+            releaseForm(form);
+            alert('Нет связи с сервером, попробуй ещё раз');
         });
+    });
+    try {
+        if (sessionStorage.getItem('scrollToHash') && location.hash) {
+            var anchor = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+            if (anchor) anchor.scrollIntoView({ block: 'center' });
+        }
+        sessionStorage.removeItem('scrollToHash');
+    } catch (e) {}
+
+    // "‹ Назад" returns to the previous app page (with its scroll position);
+    // its href is only the fallback for a page opened directly.
+    document.addEventListener('click', function (e) {
+        var link = e.target.closest('a.back');
+        if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if ((history.state || {}).from) {
+            e.preventDefault();
+            history.back();
+        }
+    });
+    window.addEventListener('pagehide', function () {
+        try {
+            sessionStorage.setItem('lastPage', JSON.stringify({
+                url: location.href.split('#')[0], from: (history.state || {}).from || null
+            }));
+        } catch (e) {}
+    });
+    // Coming back restores the page from the browser's memory as it was when
+    // left: reload it so edits made since (e.g. in a receipt) show up.
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) location.reload();
     });
 </script>
 </body>

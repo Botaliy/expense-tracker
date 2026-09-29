@@ -74,6 +74,17 @@
 {% endblock %}
 {% block content %}
 <main class="search-page">
+    <a class="back" id="search-back" href="/" hidden>‹ Назад</a>
+    <script>
+        // Search is a tab, but it is also opened from product links (prices,
+        // forecast): then offer the way back to that page.
+        (function () {
+            var from = (history.state || {}).from;
+            if (from && ['/', '/dashboard', '/more'].indexOf(from) === -1) {
+                document.getElementById('search-back').hidden = false;
+            }
+        })();
+    </script>
     <div class="search-wrap">
     <form class="search-box" method="get" action="/search" role="search">
         <input type="search" name="q" value="{{ query }}" placeholder="coffee, beer, Lidl…"

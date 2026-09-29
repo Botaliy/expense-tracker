@@ -6,8 +6,6 @@
     .panel { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 18px; }
     .panel h2 { font-size: 15px; margin: 0 0 4px; }
     .panel .lead { font-size: 13px; color: var(--muted); margin: 0 0 12px; max-width: 62ch; }
-    .back { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; align-self: flex-start; }
-    .back:hover { color: var(--text); }
 
     .toggles { display: flex; flex-wrap: wrap; gap: 8px; }
     .toggle { position: relative; }
@@ -33,7 +31,7 @@
 {% endblock %}
 {% block content %}
 <main class="fc-page">
-    <a class="back" href="/dashboard">‹ Дашборд</a>
+    <a class="back" href="/dashboard">‹ Назад</a>
 
     <section class="panel" aria-labelledby="fc-title">
         <h2 id="fc-title">Скоро понадобится</h2>

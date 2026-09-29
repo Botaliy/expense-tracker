@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
@@ -38,6 +39,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Expense Tracker", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+
+
+# Pages are never reused from the browser's cache: going back to the feed
+# after editing a receipt must show the edit.
+@app.middleware("http")
+async def no_store_pages(request: Request, call_next):
+    response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
+# Forms posted by base.html's script via fetch get the redirect target as a
+# header: fetch would follow it itself and drop its #anchor (the new feed row).
+@app.middleware("http")
+async def redirect_for_fetch(request: Request, call_next):
+    response = await call_next(request)
+    if request.headers.get("X-Page-Form") and 300 <= response.status_code < 400:
+        return Response(status_code=204, headers={"X-Location": response.headers["location"]})
+    return response
 
 app.mount("/uploads", StaticFiles(directory=str(settings.upload_path)), name="uploads")
 STATIC_DIR = BASE_DIR / "app" / "static"

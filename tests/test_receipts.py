@@ -63,6 +63,22 @@ def test_printed_european_date_overrides_swapped_iso_date(logged_in_client):
         assert db.get(Receipt, _receipt_id(resp)).purchase_date == date(2026, 10, 1)
 
 
+def test_ambiguous_date_uses_upload_day_only_for_strong_match():
+    from datetime import date
+
+    from app.receipts import _parse_date
+
+    uploaded_on = date(2026, 10, 1)
+    assert _parse_date("2026-01-10", uploaded_on=uploaded_on) == uploaded_on
+    assert _parse_date("2026-01-10", "10/01/26", uploaded_on) == uploaded_on
+    assert _parse_date("2026-01-10", "01/10/26", uploaded_on) == uploaded_on
+    # Neither interpretation close to the upload: retain the printed date.
+    assert _parse_date("2026-01-10", "10/01/26", date(2026, 6, 1)) == date(2026, 1, 10)
+    # A recent alternative is not enough if the first date is also plausible.
+    assert _parse_date("2026-08-10", uploaded_on=date(2026, 10, 8)) == date(2026, 8, 10)
+    assert _parse_date("2026-10-13", uploaded_on=uploaded_on) == date(2026, 10, 13)
+
+
 def test_upload_receipt_handles_ai_failure(logged_in_client):
     from app.ai_client import ReceiptExtractionError
 

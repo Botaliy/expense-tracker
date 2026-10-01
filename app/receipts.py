@@ -15,9 +15,24 @@ from app.rules import apply_rules
 from app.schemas import ExtractedReceipt
 
 
-def _parse_date(value: str | None, printed: str | None = None) -> date | None:
+def _prefer_date_near_upload(parsed: date, uploaded_on: date) -> date:
+    """Resolve a likely day/month flip when one date matches the upload day."""
+    if parsed.day > 12 or parsed.day == parsed.month:
+        return parsed
+    swapped = date(parsed.year, parsed.day, parsed.month)
+    # A close match alone would rewrite genuine old receipts uploaded later.
+    # Require the model's interpretation to be several months away as well.
+    if abs((swapped - uploaded_on).days) <= 2 and abs((parsed - uploaded_on).days) >= 90:
+        return swapped
+    return parsed
+
+
+def _parse_date(
+    value: str | None, printed: str | None = None, uploaded_on: date | None = None
+) -> date | None:
     # The model sometimes flips an ambiguous European date while converting it
     # to ISO (01/10/26 -> 2026-01-10). Parse the copied print ourselves.
+    parsed = None
     if printed:
         match = re.search(r"(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})(?!\d)", printed)
         if match:
@@ -25,15 +40,17 @@ def _parse_date(value: str | None, printed: str | None = None) -> date | None:
             if year < 100:
                 year += 2000
             try:
-                return date(year, month, day)
+                parsed = date(year, month, day)
             except ValueError:
                 pass
-    if not value:
+    if parsed is None and value:
+        try:
+            parsed = datetime.fromisoformat(value).date()
+        except ValueError:
+            pass
+    if parsed is None:
         return None
-    try:
-        return datetime.fromisoformat(value).date()
-    except ValueError:
-        return None
+    return _prefer_date_near_upload(parsed, uploaded_on or date.today())
 
 
 def _total_adjustment(extracted: ExtractedReceipt) -> LineItem | None:
@@ -120,7 +137,9 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
         return receipt
 
     receipt.store_name = extracted.store_name
-    receipt.purchase_date = _parse_date(extracted.purchase_date, extracted.purchase_date_text)
+    receipt.purchase_date = _parse_date(
+        extracted.purchase_date, extracted.purchase_date_text, receipt.uploaded_at.date()
+    )
     receipt.currency = extracted.currency
     receipt.raw_ai_response = extracted.model_dump_json()
     receipt.status = ReceiptStatus.PROCESSED

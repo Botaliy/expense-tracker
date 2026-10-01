@@ -25,6 +25,7 @@ class ExtractedLineItem(BaseModel):
 class ExtractedReceipt(BaseModel):
     store_name: str | None = None
     purchase_date: str | None = None  # ISO date string, parsed by caller
+    purchase_date_text: str | None = None  # Date transcribed exactly as printed
     currency: str | None = None
     total_amount: float | None = None
     items: list[ExtractedLineItem] = []

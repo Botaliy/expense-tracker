@@ -35,6 +35,11 @@ EXTRACT_TOOL = {
                 "type": "string",
                 "description": "Date of purchase in ISO 8601 (YYYY-MM-DD). Omit if no date is printed.",
             },
+            "purchase_date_text": {
+                "type": "string",
+                "description": "Copy the date exactly as printed, preserving day/month order and separators "
+                "(e.g. 01/10/26). Use an empty string if no date is printed.",
+            },
             "currency": {
                 "type": "string",
                 "description": "Currency code or symbol as shown on the receipt (e.g. EUR, USD, GBP).",
@@ -65,7 +70,7 @@ EXTRACT_TOOL = {
                 },
             },
         },
-        "required": ["items"],
+        "required": ["items", "purchase_date_text"],
     },
 }
 
@@ -80,7 +85,9 @@ PROMPT = (
     "Amounts should be plain numbers without currency symbols. "
     # Each rule below fixes a mistake seen on real receipts (Cyprus, Greek/English).
     "Receipts are European: dates are written day first (08/09/2026 is 8 September "
-    "2026, never 9 August). Only use a date that is printed as a date; cash register, "
+    "2026, never 9 August; 01/10/26 is 1 October 2026, not 10 January). "
+    "Also copy the printed date verbatim into purchase_date_text. "
+    "Only use a date that is printed as a date; cash register, "
     "terminal or transaction numbers are not dates — omit the date rather than guess. "
     "When a line has a discount (e.g. 'FROM 2.60 TO 2.39' or a following '-0.21' line "
     "for that item), record the discounted amount on the item itself. "

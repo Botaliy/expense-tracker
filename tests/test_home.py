@@ -80,6 +80,38 @@ def test_summary_compares_with_previous_month(logged_in_client):
     assert "↓ 50% к февралю" in page
 
 
+def test_uploaded_receipt_opens_its_recognized_month(logged_in_client):
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    today = date.today()
+    previous_month = today.replace(day=1) - timedelta(days=1)
+    extraction = ExtractedReceipt(
+        store_name="Магазин",
+        purchase_date=previous_month.isoformat(),
+        items=[ExtractedLineItem(description="Хлеб", amount=3, category="Продукты")],
+    )
+    with patch("app.receipts.extract_receipt_data", return_value=extraction):
+        upload = logged_in_client.post(
+            "/receipts",
+            files={"file": ("r.jpg", io.BytesIO(b"previous-month"), "image/jpeg")},
+            follow_redirects=False,
+        )
+    receipt_id = _receipt_id(upload)
+    with SessionLocal() as db:
+        assert db.get(Receipt, receipt_id).purchase_date == previous_month
+
+    initial_url = upload.headers["location"].split("#", 1)[0]
+    moved = logged_in_client.get(initial_url, follow_redirects=False)
+    target = f"/?month={previous_month:%Y-%m}#r-{receipt_id}"
+    assert moved.status_code == 303
+    assert moved.headers["location"] == target
+    assert "Магазин" in logged_in_client.get(target).text
+
+    polled = logged_in_client.get(initial_url, headers={"HX-Request": "true"})
+    assert polled.headers["HX-Redirect"] == target
+
+
 def test_pending_receipt_polls_until_done(logged_in_client):
     from app.database import SessionLocal
     from app.models import Receipt, ReceiptStatus

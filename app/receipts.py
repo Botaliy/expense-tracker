@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import date, datetime
 from pathlib import Path
@@ -14,7 +15,19 @@ from app.rules import apply_rules
 from app.schemas import ExtractedReceipt
 
 
-def _parse_date(value: str | None) -> date | None:
+def _parse_date(value: str | None, printed: str | None = None) -> date | None:
+    # The model sometimes flips an ambiguous European date while converting it
+    # to ISO (01/10/26 -> 2026-01-10). Parse the copied print ourselves.
+    if printed:
+        match = re.search(r"(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})(?!\d)", printed)
+        if match:
+            day, month, year = map(int, match.groups())
+            if year < 100:
+                year += 2000
+            try:
+                return date(year, month, day)
+            except ValueError:
+                pass
     if not value:
         return None
     try:
@@ -107,7 +120,7 @@ def process_receipt(db: Session, receipt: Receipt) -> Receipt:
         return receipt
 
     receipt.store_name = extracted.store_name
-    receipt.purchase_date = _parse_date(extracted.purchase_date)
+    receipt.purchase_date = _parse_date(extracted.purchase_date, extracted.purchase_date_text)
     receipt.currency = extracted.currency
     receipt.raw_ai_response = extracted.model_dump_json()
     receipt.status = ReceiptStatus.PROCESSED

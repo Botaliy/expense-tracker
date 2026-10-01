@@ -11,7 +11,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.ai_client import (
@@ -43,9 +43,19 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 def list_receipts(
     request: Request,
     month: str | None = Query(default=None, description="YYYY-MM"),
+    uploaded: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     year, mon = parse_month(month)
+    if uploaded is not None:
+        receipt = db.get(Receipt, uploaded)
+        if receipt is not None and receipt.status == ReceiptStatus.PROCESSED:
+            day = _receipt_day(receipt)
+            if (day.year, day.month) != (year, mon):
+                target = _home_url(day, receipt.id)
+                if request.headers.get("HX-Request"):
+                    return Response(status_code=200, headers={"HX-Redirect": target})
+                return RedirectResponse(url=target, status_code=303)
     start, end = month_bounds(year, mon)
     today = date.today()
     days = month_feed(db, start, end)
@@ -131,7 +141,10 @@ def _accept_uploads(files: list[UploadFile], db: Session, background_tasks: Back
         raise HTTPException(status_code=400, detail="Empty file")
     if not receipt_ids:  # all of them were already uploaded
         return RedirectResponse(url="/", status_code=303)
-    return RedirectResponse(url=_home_url(None, receipt_ids[-1]), status_code=303)
+    receipt = db.get(Receipt, receipt_ids[-1])
+    day = receipt.uploaded_at.date()
+    target = f"/?month={day:%Y-%m}&uploaded={receipt.id}#r-{receipt.id}"
+    return RedirectResponse(url=target, status_code=303)
 
 
 # Plain ``def`` so FastAPI runs it in a threadpool; recognition itself happens

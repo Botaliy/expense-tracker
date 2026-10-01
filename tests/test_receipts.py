@@ -43,6 +43,26 @@ def test_upload_receipt_creates_processed_record(logged_in_client):
     assert "распознано по фото" in detail.text
 
 
+def test_printed_european_date_overrides_swapped_iso_date(logged_in_client):
+    from datetime import date
+
+    from app.database import SessionLocal
+    from app.models import Receipt
+
+    extraction = _fake_extraction().model_copy(update={
+        "purchase_date": "2026-01-10",
+        "purchase_date_text": "01/10/26 09:41",
+    })
+    with patch("app.receipts.extract_receipt_data", return_value=extraction):
+        resp = logged_in_client.post(
+            "/receipts",
+            files={"file": ("receipt.jpg", io.BytesIO(b"date-order"), "image/jpeg")},
+            follow_redirects=False,
+        )
+    with SessionLocal() as db:
+        assert db.get(Receipt, _receipt_id(resp)).purchase_date == date(2026, 10, 1)
+
+
 def test_upload_receipt_handles_ai_failure(logged_in_client):
     from app.ai_client import ReceiptExtractionError
 

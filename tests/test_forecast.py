@@ -47,9 +47,24 @@ def test_long_unbought_product_is_dropped():
     assert predict_product("salami", "Продукты", salami, TODAY) is None
 
 
-def test_irregular_product_is_dropped():
-    tobacco = _days("2026-08-10", "2026-08-13", "2026-08-21", "2026-09-04")  # gaps 3, 8, 14
-    assert predict_product("tobacco sticks", "Алкоголь/табак", tobacco, date(2026, 9, 6)) is None
+def test_gaps_hiding_missed_receipts_are_split():
+    # Real water purchases up to 2026-10-04: gaps 6, 12, 2, 4, 10, 6, 3, 3. A plain
+    # median says every 5 days, yet they were bought every ~3 and the receipts
+    # in between are simply missing.
+    water = _days(
+        "2026-08-19", "2026-08-25", "2026-09-06", "2026-09-08", "2026-09-12",
+        "2026-09-22", "2026-09-28", "2026-10-01", "2026-10-04",
+    )
+    p = predict_product("water", "Продукты", water, date(2026, 10, 6))
+    assert p is not None
+    assert p.interval_days == 3
+    assert p.due_date == date(2026, 10, 7)
+
+
+def test_old_history_is_ignored():
+    # A purchase a year ago plus two recent ones isn't a 6-month habit.
+    spread = _days("2025-10-02", "2026-09-22", "2026-10-04")
+    assert predict_product("chocolate spread", "Продукты", spread, date(2026, 10, 6)) is None
 
 
 def _buy(client, product, category, day, description=None):
@@ -107,6 +122,18 @@ def test_hiding_a_product_from_the_dashboard(logged_in_client):
     assert 'title="Снова учитывать plastic bag"' in forecast
     logged_in_client.post("/forecast/exclusions/delete", data={"product": "plastic bag"})
     assert '<a class="t" href="/search?q=plastic%20bag">' in logged_in_client.get("/dashboard").text
+
+
+def test_purchases_in_an_excluded_category_dont_count(logged_in_client):
+    # Water at home weekly, plus a bottle at a restaurant two days after the
+    # last one: the restaurant bottle mustn't move the next due date.
+    logged_in_client.post("/forecast/categories", data={"excluded": ["Кафе/рестораны"]})
+    _weekly(logged_in_client, "water", "Продукты")
+    _buy(logged_in_client, "water", "Кафе/рестораны", date.today() - timedelta(days=4))
+
+    page = logged_in_client.get("/dashboard").text
+    assert "раз в ~7 дней" in page
+    assert "завтра" in page
 
 
 def test_excluded_category_is_ignored(logged_in_client):

@@ -55,6 +55,8 @@ class Price:
 
 
 PRICES = {
+    # Haiku 5.5 bills $0.50 / $2.50 for prompts over 100K tokens; ours are far shorter.
+    "claude-haiku-5-5": Price(input=0.10, output=0.50),
     "claude-haiku-4-5": Price(input=1.00, output=5.00),
     "claude-sonnet-5": Price(input=2.00, output=10.00),
     "claude-sonnet-4-6": Price(input=3.00, output=15.00),

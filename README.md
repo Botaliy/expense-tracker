@@ -26,7 +26,7 @@
 - FastAPI + SQLAlchemy + SQLite
 - Jinja2 + HTMX (без отдельного фронтенда)
 - Session-based логин с одним захардкоженным пользователем
-- Anthropic API (`claude-haiku-4-5`, vision + tool use) для распознавания чеков
+- Anthropic API (`claude-haiku-5-5`, vision + tool use) для распознавания чеков
 
 ## Установка
 

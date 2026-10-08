@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 
 
-def _response(tool_input, model="claude-haiku-4-5-20251001", **usage):
+def _response(tool_input, model="claude-haiku-5-5", **usage):
     usage = {"input_tokens": 1000, "output_tokens": 500, **usage}
     return SimpleNamespace(
         content=[SimpleNamespace(type="tool_use", input=tool_input)],
@@ -42,6 +42,8 @@ def test_cost_uses_list_prices_and_dated_model_ids():
     assert cost_usd("claude-haiku-4-5", 0, 0, 1000, 1000) == pytest.approx(0.00135)
     assert price_for("claude-haiku-4-5-20251001") is price_for("claude-haiku-4-5")
     assert price_for("claude-haiku-4") is None
+    # Haiku 5.5: $0.10 in / $0.50 out.
+    assert cost_usd("claude-haiku-5-5", 1000, 500) == pytest.approx(0.00035)
     assert cost_usd("some-other-model", 1000, 500) is None
 
 
@@ -66,7 +68,7 @@ def test_each_kind_of_request_is_logged(logged_in_client, api_key, tmp_path):
     calls = _calls()
     assert [(c.purpose, c.receipt_id) for c in calls] == [("receipt", 7), ("classify", None), ("label", None)]
     assert calls[1].input_tokens == 300 and calls[1].output_tokens == 40
-    assert calls[1].cost_usd == pytest.approx(300 / 1e6 + 40 * 5 / 1e6)
+    assert calls[1].cost_usd == pytest.approx(300 * 0.10 / 1e6 + 40 * 0.50 / 1e6)
 
 
 def test_logging_failure_never_breaks_the_request(logged_in_client, api_key):

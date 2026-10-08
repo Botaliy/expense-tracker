@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-haiku-4-5"
+    anthropic_model: str = "claude-haiku-5-5"
     # "Ask about spending" (app.ask) writes its own SQL over several rounds:
     # a step up from receipt reading, at ~2-6 cents a question. Costs show on /usage.
     ask_model: str = "claude-sonnet-5"

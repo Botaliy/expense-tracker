@@ -18,7 +18,7 @@ def _fake_client(tool_input: dict):
     block = SimpleNamespace(type="tool_use", input=tool_input)
     response = SimpleNamespace(
         content=[block],
-        model="claude-haiku-4-5",
+        model="claude-haiku-5-5",
         usage=SimpleNamespace(input_tokens=100, output_tokens=20),
     )
     return SimpleNamespace(messages=SimpleNamespace(create=lambda **_: response))
